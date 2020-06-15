@@ -1,0 +1,529 @@
+package com.itahm.erp;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.sql.SQLException;
+
+import com.itahm.http.Request;
+import com.itahm.http.Response;
+import com.itahm.http.Session;
+import com.itahm.json.JSONException;
+import com.itahm.json.JSONObject;
+
+import com.itahm.service.Serviceable;
+
+public class ERP implements Serviceable {
+
+	private final static int SESS_TIMEOUT = 3600;
+	
+	private Commander agent;
+	private final Path root;
+	private Boolean isClosed = true;
+	
+	public ERP(Path path) throws Exception {
+		root = path;
+	}
+
+	@Override
+	public void start() {
+		synchronized(this.isClosed) {
+			if (!this.isClosed) {
+				return;
+			}
+			
+			try {
+				this.agent = new H2Agent(this.root);
+				
+				this.isClosed = false;
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	@Override
+	public void stop() {
+		synchronized(this.isClosed) {
+			if (this.isClosed) {
+				return;
+			}
+			
+			try {
+				this.agent.close();
+			} catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
+			
+			this.isClosed = true;
+		}
+	}
+
+	@Override
+	public boolean service(Request request, Response response, JSONObject data) {
+		synchronized(this.isClosed) {
+			if (this.isClosed) {
+				return false;
+			}
+		}
+		
+		try {
+			Session session = request.getSession(false);
+			
+			if (session == null) {
+				if (data != null) {
+					String command = data.getString("command").toUpperCase();
+					
+					if (command.equals("SIGNIN")) {
+						JSONObject account = this.agent.signIn(data);
+						
+						if (account != null) {
+							session = request.getSession();
+							
+							session.setAttribute("account", account);
+							
+							session.setMaxInactiveInterval(SESS_TIMEOUT);
+							
+							response.write(account.toString());
+							
+							return true;
+						}
+					}
+				}
+				
+				response.setStatus(Response.Status.UNAUTHORIZED);
+			} else {
+				if (data != null) {
+					JSONObject account = (JSONObject)session.getAttribute("account");
+					
+					switch (data.getString("command").toUpperCase()) {
+					case "SIGNIN":
+						response.write(account.toString());
+						
+						break;
+					case "SIGNOUT":
+						session.invalidate();
+						
+						break;
+					case "ADD":
+						add(data, response, account);
+						
+						break;
+					case "BACKUP":
+						if (account.getInt("level") > 0) {
+							response.setStatus(Response.Status.FORBIDDEN);
+						} else {
+							this.agent.backup();
+						}
+						
+						break;
+					case "ECHO": break;
+					case "GET":
+						get(data, response, account);				
+						
+						break;			
+					case "REMOVE":
+						remove(data, response, account);
+						
+						break;
+					case "SET":
+						set(data, response, account);
+						
+						break;
+					default:
+						response.setStatus(Response.Status.BADREQUEST);
+						
+						response.write(new JSONObject().
+							put("error", "Command is not found.").toString());
+					}
+				} else {
+					Object o = request.getAttribute("file");
+					
+					if (o != null && o instanceof JSONObject) {
+						byte [] bin = request.read();
+						
+						if (bin.length > 0) {
+							JSONObject file = (JSONObject)o;
+							
+							this.agent.setFile(file.getLong("id"), file.getString("doc"), file.getString("name"), bin);
+						} else {
+							response.setStatus(Response.Status.NOCONTENT);	
+						}
+					} else {
+						response.setStatus(Response.Status.BADREQUEST);
+					}
+				}
+			}
+		} catch (JSONException jsone) {
+			response.setStatus(Response.Status.BADREQUEST);
+			
+			response.write(new JSONObject().
+				put("error", jsone.getMessage()).toString());
+		} catch (Exception e) {
+			response.setStatus(Response.Status.SERVERERROR);
+			
+			response.write(new JSONObject().
+				put("error", e.getMessage()).toString());
+		}
+	
+		return true;
+	}
+	
+	private void add(JSONObject request, Response response, JSONObject account) {
+		switch(request.getString("target").toUpperCase()) {
+		case "COMPANY":
+			if (!agent.addCompany(request.getJSONObject("company"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "ITEM":
+			if (!agent.addItem(request.getJSONObject("item"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+		case "MANAGER":
+			if (!agent.addManager(request.getJSONObject("manager"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "PROJECT":
+			if (!agent.addProject(request.getJSONObject("project"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "REPORT":
+			if (!agent.addReport(request.getJSONObject("report"), account.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "SPEND":
+			if (!agent.addSpend(request.getJSONObject("spend"), account.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "USER":
+			if (!agent.addUser(request.getJSONObject("user"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		default:
+			throw new JSONException("Target is not found.");
+		}
+	}
+	
+	private void get(JSONObject request, Response response, JSONObject account) {
+		JSONObject result;
+		
+		switch(request.getString("target").toUpperCase()) {
+		case "COMPANY":
+			if (request.has("id")) {
+				result = this.agent.getCompany(request.getString("id"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else {
+				result = this.agent.getCompany();
+				
+				if (result == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(result.toString());
+				}
+			}
+			
+			break;
+		case "FILE":
+			if (request.has("id")) {
+				if (request.has("binary")) {
+					byte [] binary = this.agent.download(request.getLong("id"), request.getString("doc"));
+					
+					if (binary != null) {
+						response.write(binary);
+					} else {
+						response.setStatus(Response.Status.NOCONTENT);
+					}
+				} else {
+					JSONObject file = this.agent.getFile(request.getLong("id"), request.getString("doc"));
+					
+					if (file != null) {
+						response.write(file.toString());
+					} else {
+						response.setStatus(Response.Status.NOCONTENT);
+					}
+				}
+			} else {
+				JSONObject fileData = this.agent.getFile();
+				
+				if (fileData != null) {
+					response.write(fileData.toString());
+				} else {
+					response.setStatus(Response.Status.SERVERERROR);
+				}
+			}
+			
+			break;
+		case "ITEM":
+			if (request.has("id")) {
+				JSONObject item = this.agent.getItem(request.getLong("id"));
+				
+				if (item == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(item.toString());
+				}
+			} else {
+				JSONObject itemData = this.agent.getItem();
+				
+				if (itemData == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(itemData.toString());
+				}
+			}
+			
+			break;
+		case "MANAGER":			
+			if (request.has("id")) {
+				result = this.agent.getManager(request.getLong("id"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else if (request.has("company")) {
+				result = this.agent.getManager(request.getString("company"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else {
+				result = this.agent.getManager();
+				
+				if (result == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(result.toString());
+				}
+			}
+			
+			break;
+		case "PROJECT":
+			if (request.has("id")) {
+				result = this.agent.getProject(request.getLong("id"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else {
+				result = this.agent.getProject();
+				
+				if (result == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(result.toString());
+				}
+			}
+			
+			break;
+		case "REPORT":
+			JSONObject reportData = this.agent.getReport(account.getLong("id"));
+			
+			if (reportData != null) {
+				response.write(reportData.toString());
+			} else {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "SPEND":
+			JSONObject spendData;
+			
+			if (request.has("id")) {
+				spendData = this.agent.getSpend(request.getLong("id"));
+			} else {
+				spendData = this.agent.getMySpend(account.getLong("id"));
+			}
+			
+			if (spendData != null) {
+				response.write(spendData.toString());
+			} else {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "USER":
+			if (request.has("id")) {
+				if (account.getInt("level") > 0 && account.getLong("id") != request.getLong("id")) {
+					response.setStatus(Response.Status.FORBIDDEN);
+				} else {
+					JSONObject user = this.agent.getUser(request.getLong("id"));
+					
+					if (user == null) {
+						response.setStatus(Response.Status.NOCONTENT);
+					} else {
+						response.write(user.toString());
+					}
+				}
+			} else {
+				JSONObject userData = this.agent.getUser();
+				
+				if (userData == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(userData.toString());
+				}
+			}
+			
+			break;
+		default:
+			throw new JSONException("Target is not found.");
+		}
+	}
+	
+	private void remove(JSONObject request, Response response, JSONObject account) {
+		switch(request.getString("target").toUpperCase()) {
+		case "COMPANY":
+			if (!agent.removeCompany(request.getString("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "FILE":
+			if (!agent.removeFile(request.getLong("id"), request.getString("doc"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "ITEM":
+			if (!agent.removeItem(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "MANAGER":
+			if (!agent.removeManager(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "PROJECT":
+			if (!agent.removeProject(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "REPORT":
+			if (!agent.removeReport(request.getLong("id"), request.getString("doc"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "SPEND":
+			if (!agent.removeSpend(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "USER":
+			if (!account.getString("username").equals("root")) {
+				response.setStatus(Response.Status.FORBIDDEN);
+			} else if (!agent.removeUser(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		default:
+			throw new JSONException("Target is not found.");
+		}
+	}
+	
+	private void set(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
+		switch(request.getString("target").toUpperCase()) {
+		case "COMPANY":
+			if (!this.agent.setCompany(request.getString("id"), request.getJSONObject("company"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "ITEM":
+			if (!this.agent.setItem(request.getLong("id"), request.getJSONObject("item"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "MANAGER":
+			if (!this.agent.setManager(request.getLong("id"), request.getJSONObject("manager"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "PASSWORD":
+			if (request.has("id")) {
+				if (account.getInt("level") > 0) {
+					response.setStatus(Response.Status.FORBIDDEN);	
+				} else if (!this.agent.setPassword(request.getLong("id"), request.getString("password"))){
+					response.setStatus(Response.Status.SERVERERROR);
+				}
+			} else {
+				if (!this.agent.setPassword(account.getLong("id"), request.getString("password"))) {
+					response.setStatus(Response.Status.SERVERERROR);
+				}
+			}
+			
+			break;
+		case "PROJECT":
+			if (!this.agent.setProject(account.getLong("id"), request.getJSONObject("project"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "REPORT":
+			if (request.has("boss")) {
+				if (!this.agent.setReport(request.getLong("id"), request.getString("doc"), request.getLong("boss"))) {
+					response.setStatus(Response.Status.SERVERERROR);
+				}
+			} else if (request.has("password")) {
+				if (!this.agent.setReport(request.getLong("id"), request.getString("doc"), account.getLong("id"), request.getString("password"))) {
+					response.setStatus(Response.Status.FORBIDDEN);
+				}
+			}
+			
+			break;
+		case "SPEND":
+			if (!this.agent.setSpend(request.getLong("id"), request.getJSONObject("spend"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "USER":
+			if (account.getInt("level") > 0) {
+				response.setStatus(Response.Status.FORBIDDEN);
+			} else if (!this.agent.setUser(request.getLong("id"), request.getJSONObject("user"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		default:	
+			throw new JSONException("Target is not found.");
+		}
+	}
+	
+	@Override
+	public boolean isRunning() {
+		synchronized(this.isClosed) {
+			return !this.isClosed;
+		}
+	}
+}
