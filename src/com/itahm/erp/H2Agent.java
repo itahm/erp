@@ -681,8 +681,10 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" id, name, contract, deposit, start, end, payment, content, company, manager"+
-					" FROM t_project"+
+					" P.id, P.name, contract, deposit, start, end, payment, content, C.name, manager"+
+					" FROM t_project AS P"+
+					" LEFT JOIN t_company AS C"+
+					" ON P.company=C.id"+
 					";")) {
 					JSONObject
 						prjData = new JSONObject(),
