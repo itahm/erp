@@ -151,8 +151,8 @@ public class H2Agent implements Commander, Closeable {
 	public boolean addOperation(JSONObject operation) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_operation"+
-				" (user, car, date, before, after, extra, total, comment)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?);")) {
+				" (user, car, date, before, after, extra, total, parking, stock, comment)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
 				pstmt.setLong(1, operation.getLong("user"));
 				pstmt.setLong(2, operation.getLong("car"));
 				pstmt.setString(3, operation.getString("date"));
@@ -160,7 +160,9 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setInt(5, operation.getInt("after"));
 				pstmt.setInt(6, operation.getInt("extra"));
 				pstmt.setInt(7, operation.getInt("total"));
-				pstmt.setString(8, operation.getString("comment"));
+				pstmt.setString(8, operation.getString("parking"));
+				pstmt.setString(9, operation.getString("stock"));
+				pstmt.setString(10, operation.getString("comment"));
 				
 				pstmt.executeUpdate();
 			}
@@ -728,7 +730,7 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" O.id, U.name, C.name, date, before, after, extra, total, comment"+
+					" O.id, U.name, C.name, date, before, after, extra, total, parking, stock, comment"+
 					" FROM t_operation AS O"+
 					" LEFT JOIN t_car AS C"+
 					" ON O.car=C.id"+
@@ -749,7 +751,9 @@ public class H2Agent implements Commander, Closeable {
 							.put("after", rs.getInt(6))
 							.put("extra", rs.getInt(7))
 							.put("total", rs.getInt(8))
-							.put("comment", rs.getString(9));
+							.put("parking", rs.getString(9))
+							.put("stock", rs.getString(10))
+							.put("comment", rs.getString(11));
 						
 						opData.put(Long.toString(rs.getLong(1)), operation);
 					}
@@ -768,7 +772,7 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getOperation(long id) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" U.name, car, date, before, after, extra, total, comment"+
+				" U.name, car, date, before, after, extra, total, parking, stock, comment"+
 				" FROM t_operation AS O"+
 				" LEFT JOIN t_car AS C"+
 				" ON O.car=C.id"+
@@ -789,7 +793,9 @@ public class H2Agent implements Commander, Closeable {
 							.put("after", rs.getInt(5))
 							.put("extra", rs.getInt(6))
 							.put("total", rs.getInt(7))
-							.put("comment", rs.getString(8));
+							.put("parking", rs.getString(8))
+							.put("stock", rs.getString(9))
+							.put("comment", rs.getString(10));
 					}
 				}
 			}
@@ -1229,12 +1235,21 @@ public class H2Agent implements Commander, Closeable {
 					", after INTEGER NOT NULL"+
 					", extra INTEGER NOT NULL"+
 					", total INTEGER NOT NULL"+
+					", parking VARCHAR NOT NULL"+
+					", stock VARCHAR NOT NULL"+
 					", comment VARCHAR NOT NULL"+
 					", CONSTRAINT FK_USER_OPERATION FOREIGN KEY (user) REFERENCES t_user(id)"+
 					", CONSTRAINT FK_CAR_OPERATION FOREIGN KEY (car) REFERENCES t_car(id)"+
 					");");
 			}
 			
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("alter TABLE IF EXISTS t_operation add column parking varchar not null default ''");
+			}
+			
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("alter TABLE IF EXISTS t_operation add column stock varchar not null default ''");
+			}
 			/**END**/
 			
 			/**
@@ -1708,6 +1723,8 @@ public class H2Agent implements Commander, Closeable {
 				" after=?,"+
 				" extra=?,"+
 				" total=?,"+
+				" parking=?,"+
+				" stock=?,"+
 				" comment=?"+
 				" WHERE id=?"+
 				";")) {
@@ -1717,8 +1734,10 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setInt(4, operation.getInt("after"));
 				pstmt.setInt(5, operation.getInt("extra"));
 				pstmt.setInt(6, operation.getInt("total"));
-				pstmt.setString(7, operation.getString("comment"));
-				pstmt.setLong(8, id);
+				pstmt.setString(7, operation.getString("parking"));
+				pstmt.setString(8, operation.getString("stock"));
+				pstmt.setString(9, operation.getString("comment"));
+				pstmt.setLong(10, id);
 				
 				pstmt.executeUpdate();
 			}
