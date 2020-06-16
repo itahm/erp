@@ -182,6 +182,12 @@ public class ERP implements Serviceable {
 			}
 			
 			break;
+		case "INVOICE":
+			if (!agent.addInvoice(request.getJSONObject("invoice"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
 		case "ITEM":
 			if (!agent.addItem(request.getJSONObject("item"))) {
 				response.setStatus(Response.Status.SERVERERROR);
@@ -298,6 +304,26 @@ public class ERP implements Serviceable {
 					response.write(fileData.toString());
 				} else {
 					response.setStatus(Response.Status.SERVERERROR);
+				}
+			}
+			
+			break;
+		case "INVOICE":
+			if (request.has("project")) {
+				result = this.agent.getInvoice(request.getLong("project"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else {
+				result = this.agent.getInvoice();
+				
+				if (result == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(result.toString());
 				}
 			}
 			
@@ -465,6 +491,12 @@ public class ERP implements Serviceable {
 			}
 			
 			break;
+		case "INVOICE":
+			if (!agent.removeInvoice(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
 		case "ITEM":
 			if (!agent.removeItem(request.getLong("id"))) {
 				response.setStatus(Response.Status.SERVERERROR);
@@ -524,6 +556,12 @@ public class ERP implements Serviceable {
 			break;
 		case "COMPANY":
 			if (!this.agent.setCompany(request.getString("id"), request.getJSONObject("company"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "INVOICE":
+			if (!this.agent.setInvoice(request.getLong("id"), request.getJSONObject("invoice"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			

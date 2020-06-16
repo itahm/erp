@@ -9,6 +9,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 
@@ -74,6 +75,25 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(2, company.getString("id"));
 				pstmt.setString(3, company.getString("ceo"));
 				pstmt.setString(4, company.getString("address"));
+				
+				pstmt.executeUpdate();
+			}
+			
+			return true;
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return false;	
+	}
+	
+	@Override
+	public boolean addInvoice(JSONObject invoice) {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_invoice (type, project)"+
+				" VALUES(?, ?);")) {
+				pstmt.setInt(1, invoice.getInt("type"));
+				pstmt.setLong(2, invoice.getLong("project"));
 				
 				pstmt.executeUpdate();
 			}
@@ -447,6 +467,110 @@ public class H2Agent implements Commander, Closeable {
 							.put("doc", doc)
 							.put("name", rs.getString(1));
 					}
+				}
+			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return null;
+	}
+	
+	@Override
+	public JSONObject getInvoice() {
+		try (Connection c = this.connPool.getConnection()) {
+			try (Statement stmt = c.createStatement()) {				
+				try (ResultSet rs = stmt.executeQuery("SELECT"+
+					" id, expect, issue, complete, amount, type, project"+
+					" FROM t_invoice"+
+					";")) {
+					JSONObject
+						invoiceData = new JSONObject(),
+						invoice;
+					String date;
+					
+					while (rs.next()) {
+						invoice = new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("amount", rs.getInt(5))
+							.put("type", rs.getInt(6))
+							.put("project", rs.getLong(7));
+						
+						date = rs.getString(2);
+						
+						if (!rs.wasNull()) {
+							invoice.put("expect", date);
+						}
+						
+						date = rs.getString(3);
+						
+						if (!rs.wasNull()) {
+							invoice.put("issue", date);
+						}
+						
+						date = rs.getString(4);
+						
+						if (!rs.wasNull()) {
+							invoice.put("complete", date);
+						}
+						
+						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
+					}
+					
+					return invoiceData;
+				}
+			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return null;
+	}
+	
+	@Override
+	public JSONObject getInvoice(long project) {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
+				" id, expect, issue, complete, amount, type"+
+				" FROM t_invoice"+
+				" WHERE project=?"+
+				";")) {
+				pstmt.setLong(1, project);
+				
+				try (ResultSet rs = pstmt.executeQuery()) {
+					JSONObject
+						invoiceData = new JSONObject(),
+						invoice;
+					String date;
+					
+					while (rs.next()) {
+						invoice = new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("amount", rs.getInt(5))
+							.put("type", rs.getInt(6));
+						
+						date = rs.getString(2);
+						
+						if (!rs.wasNull()) {
+							invoice.put("expect", date);
+						}
+						
+						date = rs.getString(3);
+						
+						if (!rs.wasNull()) {
+							invoice.put("issue", date);
+						}
+						
+						date = rs.getString(4);
+						
+						if (!rs.wasNull()) {
+							invoice.put("complete", date);
+						}
+						
+						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
+					}
+					
+					return invoiceData;
 				}
 			}
 		} catch (SQLException sqle) {
@@ -986,6 +1110,23 @@ public class H2Agent implements Commander, Closeable {
 			/**END**/
 			
 			/**
+			 * INVOICE
+			 **/
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_invoice"+
+					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
+					", expect DATE DEFAULT NULL"+
+					", issue DATE DEFAULT NULL"+
+					", complete DATE DEFAULT NULL"+
+					", amount INTEGER NOT NULL DEFAULT 0"+
+					", type INTEGER NOT NULL"+
+					", project BIGINT NOT NULL"+
+					", CONSTRAINT FK_PROJECT_INVOICE FOREIGN KEY (project) REFERENCES t_project(id)"+
+					");");
+			}
+			/**END**/
+			
+			/**
 			 * ITEM
 			 **/
 			try (Statement stmt = c.createStatement()) {
@@ -1205,6 +1346,25 @@ public class H2Agent implements Commander, Closeable {
 				" WHERE doc_id=? AND doc_name=?;")) {
 				pstmt.setLong(1, id);
 				pstmt.setString(2, doc);
+				
+				pstmt.executeUpdate();
+				
+				return true;
+			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public boolean removeInvoice(long id) {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
+				" FROM t_invoice"+
+				" WHERE id=?;")) {
+				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
 				
@@ -1438,6 +1598,47 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public boolean setInvoice(long id, JSONObject invoice) {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_invoice"+
+				" SET expect=?,"+
+				" issue=?,"+
+				" complete=?,"+
+				" amount=?"+
+				" WHERE id=?;")) {
+				if (invoice.has("expect")) {
+					pstmt.setString(1, invoice.getString("expect"));
+				} else {
+					pstmt.setNull(1, Types.NULL);
+				}
+				
+				if (invoice.has("issue")) {
+					pstmt.setString(2, invoice.getString("issue"));
+				} else {
+					pstmt.setNull(2, Types.NULL);
+				}
+				
+				if (invoice.has("complete")) {
+					pstmt.setString(3, invoice.getString("complete"));
+				} else {
+					pstmt.setNull(3, Types.NULL);
+				}
+				
+				pstmt.setInt(4, invoice.getInt("amount"));
+				pstmt.setLong(5, id);
+				
+				pstmt.executeUpdate();
+			}
+			
+			return true;
 		} catch (SQLException sqle) {
 			sqle.printStackTrace();
 		}
