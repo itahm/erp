@@ -170,6 +170,12 @@ public class ERP implements Serviceable {
 	
 	private void add(JSONObject request, Response response, JSONObject account) {
 		switch(request.getString("target").toUpperCase()) {
+		case "CAR":
+			if (!agent.addCar(request.getJSONObject("car"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
 		case "COMPANY":
 			if (!agent.addCompany(request.getJSONObject("company"))) {
 				response.setStatus(Response.Status.SERVERERROR);
@@ -182,6 +188,13 @@ public class ERP implements Serviceable {
 			}
 		case "MANAGER":
 			if (!agent.addManager(request.getJSONObject("manager"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "OPERATION":
+			if (!agent.addOperation(request.getJSONObject("operation")
+				.put("user", account.getLong("id")))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
@@ -219,6 +232,26 @@ public class ERP implements Serviceable {
 		JSONObject result;
 		
 		switch(request.getString("target").toUpperCase()) {
+		case "CAR":
+			if (request.has("id")) {
+				result = this.agent.getCar(request.getLong("id"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else {
+				result = this.agent.getCar();
+				
+				if (result == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(result.toString());
+				}
+			}
+			
+			break;
 		case "COMPANY":
 			if (request.has("id")) {
 				result = this.agent.getCompany(request.getString("id"));
@@ -317,6 +350,26 @@ public class ERP implements Serviceable {
 			}
 			
 			break;
+		case "OPERATION":
+			if (request.has("id")) {
+				result = this.agent.getOperation(request.getLong("id"));
+				
+				if (result == null) {
+					response.setStatus(Response.Status.NOCONTENT);
+				} else {
+					response.write(result.toString());
+				}
+			} else {
+				result = this.agent.getOperation();
+				
+				if (result == null) {
+					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(result.toString());
+				}
+			}
+			
+			break;
 		case "PROJECT":
 			if (request.has("id")) {
 				result = this.agent.getProject(request.getLong("id"));
@@ -394,6 +447,12 @@ public class ERP implements Serviceable {
 	
 	private void remove(JSONObject request, Response response, JSONObject account) {
 		switch(request.getString("target").toUpperCase()) {
+		case "CAR":
+			if (!agent.removeCar(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
 		case "COMPANY":
 			if (!agent.removeCompany(request.getString("id"))) {
 				response.setStatus(Response.Status.SERVERERROR);
@@ -414,6 +473,12 @@ public class ERP implements Serviceable {
 			break;
 		case "MANAGER":
 			if (!agent.removeManager(request.getLong("id"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "OPERATION":
+			if (!agent.removeOperation(request.getLong("id"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
@@ -451,6 +516,12 @@ public class ERP implements Serviceable {
 	
 	private void set(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
 		switch(request.getString("target").toUpperCase()) {
+		case "CAR":
+			if (!this.agent.setCar(request.getLong("id"), request.getJSONObject("car"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
 		case "COMPANY":
 			if (!this.agent.setCompany(request.getString("id"), request.getJSONObject("company"))) {
 				response.setStatus(Response.Status.SERVERERROR);
@@ -465,6 +536,12 @@ public class ERP implements Serviceable {
 			break;
 		case "MANAGER":
 			if (!this.agent.setManager(request.getLong("id"), request.getJSONObject("manager"))) {
+				response.setStatus(Response.Status.SERVERERROR);
+			}
+			
+			break;
+		case "OPERATION":
+			if (!this.agent.setOperation(request.getLong("id"), request.getJSONObject("operation"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
