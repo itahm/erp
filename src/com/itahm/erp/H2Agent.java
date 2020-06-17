@@ -188,8 +188,8 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(5, project.getString("end"));
 				pstmt.setString(6, project.getString("payment"));
 				pstmt.setString(7, project.getString("content"));
-				pstmt.setString(9, project.getString("company"));
-				pstmt.setString(8, project.getString("origin"));
+				pstmt.setString(8, project.getString("company"));
+				pstmt.setString(9, project.getString("origin"));
 				pstmt.setLong(10, project.getLong("manager"));
 				
 				pstmt.executeUpdate();
@@ -838,8 +838,6 @@ public class H2Agent implements Commander, Closeable {
 							.put("company", rs.getString(9))
 							.put("origin", rs.getString(10))
 							.put("manager", rs.getLong(11));
-						System.out.println(rs.getString(9));
-						System.out.println(rs.getString(10));
 						prjData.put(Long.toString(rs.getLong(1)), project);
 					}
 					
@@ -1783,14 +1781,14 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_project"+
 				" SET name=?,"+
-				" SET contract=?,"+
-				" SET deposit=?,"+
-				" SET start=?,"+
-				" SET end=?,"+
-				" SET payment=?,"+
-				" SET content=?,"+
-				" SET company=?,"+
-				" SET origin=?,"+
+				" contract=?,"+
+				" deposit=?,"+
+				" start=?,"+
+				" end=?,"+
+				" payment=?,"+
+				" content=?,"+
+				" company=?,"+
+				" origin=?"+
 				" WHERE id=?"+
 				";")) {
 				
