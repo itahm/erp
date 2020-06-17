@@ -179,8 +179,8 @@ public class H2Agent implements Commander, Closeable {
 	public boolean addProject(JSONObject project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_project"+
-				" (name, contract, deposit, start, end, payment, content, company, manager)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				" (name, contract, deposit, start, end, payment, content, company, origin, manager)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
 				pstmt.setString(1, project.getString("name"));
 				pstmt.setString(2, project.getString("contract"));
 				pstmt.setLong(3, project.getLong("deposit"));
@@ -188,8 +188,9 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(5, project.getString("end"));
 				pstmt.setString(6, project.getString("payment"));
 				pstmt.setString(7, project.getString("content"));
-				pstmt.setString(8, project.getString("company"));
-				pstmt.setLong(9, project.getLong("manager"));
+				pstmt.setString(9, project.getString("company"));
+				pstmt.setString(8, project.getString("origin"));
+				pstmt.setLong(10, project.getLong("manager"));
 				
 				pstmt.executeUpdate();
 			}
@@ -813,10 +814,12 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" P.id, P.name, contract, deposit, start, end, payment, content, C.name, manager"+
+					" P.id, P.name, contract, deposit, start, end, payment, content, C.name, C2.name, manager"+
 					" FROM t_project AS P"+
 					" LEFT JOIN t_company AS C"+
 					" ON P.company=C.id"+
+					" LEFT JOIN t_company AS C2"+
+					" ON P.origin=C2.id"+
 					";")) {
 					JSONObject
 						prjData = new JSONObject(),
@@ -833,8 +836,10 @@ public class H2Agent implements Commander, Closeable {
 							.put("payment", rs.getString(7))
 							.put("content", rs.getString(8))
 							.put("company", rs.getString(9))
-							.put("manager", rs.getLong(10));
-						
+							.put("origin", rs.getString(10))
+							.put("manager", rs.getLong(11));
+						System.out.println(rs.getString(9));
+						System.out.println(rs.getString(10));
 						prjData.put(Long.toString(rs.getLong(1)), project);
 					}
 					
@@ -852,7 +857,7 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getProject(long id) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" name, contract, deposit, start, end, payment, content, company, manager"+
+				" name, contract, deposit, start, end, payment, content, company, origin, manager"+
 				" FROM t_project"+
 				" WHERE id=?"+
 				";")) {
@@ -870,7 +875,8 @@ public class H2Agent implements Commander, Closeable {
 							.put("payment", rs.getString(6))
 							.put("content", rs.getString(7))
 							.put("company", rs.getString(8))
-							.put("manager", rs.getString(9));
+							.put("origin", rs.getString(9))
+							.put("manager", rs.getString(10));
 					}
 				}
 			}
@@ -1171,9 +1177,9 @@ public class H2Agent implements Commander, Closeable {
 			/**
 			 * PROJECT
 			 **/
-			/*try (Statement stmt = c.createStatement()) {
+			try (Statement stmt = c.createStatement()) {
 				stmt.executeUpdate("drop TABLE IF exists t_project");
-			}*/
+			}
 			try (Statement stmt = c.createStatement()) {
 				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_project ("+
 					"id BIGINT PRIMARY KEY AUTO_INCREMENT"+
@@ -1185,8 +1191,9 @@ public class H2Agent implements Commander, Closeable {
 					", payment VARCHAR NOT NULL"+
 					", content VARCHAR NOT NULL DEFAULT ''"+
 					", company VARCHAR NOT NULL"+
+					", origin VARCHAR NOT NULL"+
 					", manager BIGINT NOT NULL"+
-					", CONSTRAINT FK_COMPANY_PROJECT FOREIGN KEY (company) REFERENCES t_company(id)"+
+					", CONSTRAINT FK_COMPANY_PROJECT FOREIGN KEY (company, origin) REFERENCES t_company(id, id)"+
 					", CONSTRAINT FK_MANAGER_PROJECT FOREIGN KEY (manager) REFERENCES t_manager(id)"+
 					");");
 			}
@@ -1783,6 +1790,7 @@ public class H2Agent implements Commander, Closeable {
 				" SET payment=?,"+
 				" SET content=?,"+
 				" SET company=?,"+
+				" SET origin=?,"+
 				" WHERE id=?"+
 				";")) {
 				
@@ -1794,7 +1802,8 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(6, project.getString("payment"));
 				pstmt.setString(7, project.getString("content"));
 				pstmt.setString(8, project.getString("company"));
-				pstmt.setLong(9, id);
+				pstmt.setString(9, project.getString("origin"));
+				pstmt.setLong(10, id);
 				
 				pstmt.executeUpdate();
 				
