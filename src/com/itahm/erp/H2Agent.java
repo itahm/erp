@@ -1134,7 +1134,7 @@ public class H2Agent implements Commander, Closeable {
 					");");
 			}
 			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("ALTER TABLE IF EXISTS t_operation ADD COLUMN IF NOT EXISTS t_invoice VARCHAR NOT NULL DEFAULT ''");
+				stmt.executeUpdate("ALTER TABLE IF EXISTS t_invoice ADD COLUMN IF NOT EXISTS comment VARCHAR NOT NULL DEFAULT ''");
 			}
 			/**END**/
 			
