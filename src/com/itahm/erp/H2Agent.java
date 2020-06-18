@@ -484,8 +484,10 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" id, expect, issue, complete, amount, tax, comment, type, project"+
-					" FROM t_invoice"+
+					" I.id, expect, issue, complete, amount, tax, comment, type, project, P.name"+
+					" FROM t_invoice AS I"+
+					" LEFT JOIN t_project AS P"+
+					" ON I.project=P.id"+
 					";")) {
 					JSONObject
 						invoiceData = new JSONObject(),
@@ -499,7 +501,8 @@ public class H2Agent implements Commander, Closeable {
 							.put("tax", rs.getInt(6))
 							.put("comment", rs.getString(7))
 							.put("type", rs.getInt(8))
-							.put("project", rs.getLong(9));
+							.put("project", rs.getLong(9))
+							.put("pName", rs.getString(10));
 						
 						date = rs.getString(2);
 						
@@ -648,7 +651,7 @@ public class H2Agent implements Commander, Closeable {
 				try (ResultSet rs = stmt.executeQuery("SELECT M.id, M.name, mobile, email, C.name"+
 					" FROM t_manager AS M"+
 					" LEFT JOIN t_company AS C"+
-					" WHERE M.company=C.id"+
+					" ON M.company=C.id"+
 					";")) {
 					JSONObject
 						mgrData = new JSONObject(),
