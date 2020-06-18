@@ -484,7 +484,7 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" id, expect, issue, complete, amount, comment, type, project"+
+					" id, expect, issue, complete, amount, tax, comment, type, project"+
 					" FROM t_invoice"+
 					";")) {
 					JSONObject
@@ -496,9 +496,10 @@ public class H2Agent implements Commander, Closeable {
 						invoice = new JSONObject()
 							.put("id", rs.getLong(1))
 							.put("amount", rs.getInt(5))
-							.put("comment", rs.getString(6))
-							.put("type", rs.getInt(7))
-							.put("project", rs.getLong(8));
+							.put("tax", rs.getInt(6))
+							.put("comment", rs.getString(7))
+							.put("type", rs.getInt(8))
+							.put("project", rs.getLong(9));
 						
 						date = rs.getString(2);
 						
@@ -535,7 +536,7 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getInvoice(long project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" id, expect, issue, complete, amount, comment, type"+
+				" id, expect, issue, complete, amount, tax, comment, type"+
 				" FROM t_invoice"+
 				" WHERE project=?"+
 				";")) {
@@ -551,8 +552,9 @@ public class H2Agent implements Commander, Closeable {
 						invoice = new JSONObject()
 							.put("id", rs.getLong(1))
 							.put("amount", rs.getInt(5))
-							.put("comment", rs.getString(6))
-							.put("type", rs.getInt(7));
+							.put("tax", rs.getInt(6))
+							.put("comment", rs.getString(7))
+							.put("type", rs.getInt(8));
 						
 						date = rs.getString(2);
 						
@@ -1134,11 +1136,15 @@ public class H2Agent implements Commander, Closeable {
 					", issue DATE DEFAULT NULL"+
 					", complete DATE DEFAULT NULL"+
 					", amount INTEGER NOT NULL DEFAULT 0"+
+					", tax INTEGER NOT NULL DEFAULT 0"+
 					", comment INTEGER NOT NULL DEFAULT ''"+
 					", type INTEGER NOT NULL"+
 					", project BIGINT NOT NULL"+
 					", CONSTRAINT FK_PROJECT_INVOICE FOREIGN KEY (project) REFERENCES t_project(id)"+
 					");");
+			}
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("ALTER TABLE IF EXISTS t_invoice ADD COLUMN IF NOT EXISTS tax INTEGER NOT NULL DEFAULT 0;");
 			}
 			/**END**/
 			
@@ -1628,6 +1634,7 @@ public class H2Agent implements Commander, Closeable {
 				" issue=?,"+
 				" complete=?,"+
 				" amount=?,"+
+				" tax=?,"+
 				" comment=?"+
 				" WHERE id=?;")) {
 				if (invoice.has("expect")) {
@@ -1649,8 +1656,9 @@ public class H2Agent implements Commander, Closeable {
 				}
 				
 				pstmt.setInt(4, invoice.getInt("amount"));
-				pstmt.setString(5, invoice.getString("comment"));
-				pstmt.setLong(6, id);
+				pstmt.setInt(5, invoice.getInt("tax"));
+				pstmt.setString(6, invoice.getString("comment"));
+				pstmt.setLong(7, id);
 				
 				pstmt.executeUpdate();
 			}

@@ -599,7 +599,7 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "PROJECT":
-			if (!this.agent.setProject(account.getLong("id"), request.getJSONObject("project"))) {
+			if (!this.agent.setProject(request.getLong("id"), request.getJSONObject("project"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
