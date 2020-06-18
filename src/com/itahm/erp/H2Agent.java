@@ -643,8 +643,11 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getManager() {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
-				try (ResultSet rs = stmt.executeQuery("SELECT id, name, mobile, email, company"+
-					" FROM t_manager;")) {
+				try (ResultSet rs = stmt.executeQuery("SELECT M.id, M.name, mobile, email, C.name"+
+					" FROM t_manager AS M"+
+					" LEFT JOIN t_company AS C"+
+					" WHERE M.company=C.id"+
+					";")) {
 					JSONObject
 						mgrData = new JSONObject(),
 						manager;
@@ -1137,9 +1140,6 @@ public class H2Agent implements Commander, Closeable {
 					", CONSTRAINT FK_PROJECT_INVOICE FOREIGN KEY (project) REFERENCES t_project(id)"+
 					");");
 			}
-			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("ALTER TABLE IF EXISTS t_invoice ADD COLUMN IF NOT EXISTS comment VARCHAR NOT NULL DEFAULT ''");
-			}
 			/**END**/
 			
 			/**
@@ -1175,9 +1175,6 @@ public class H2Agent implements Commander, Closeable {
 			/**
 			 * PROJECT
 			 **/
-			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("drop TABLE IF exists t_project");
-			}
 			try (Statement stmt = c.createStatement()) {
 				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_project ("+
 					"id BIGINT PRIMARY KEY AUTO_INCREMENT"+
