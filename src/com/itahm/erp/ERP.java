@@ -311,20 +311,16 @@ public class ERP implements Serviceable {
 		case "INVOICE":
 			if (request.has("project")) {
 				result = this.agent.getInvoice(request.getLong("project"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
+			} else if (request.has("type") && request.has("status")) {
+				result = this.agent.getInvoice(request.getInt("type"), request.getInt("status"), request.has("expect")? request.getString("expect"): null);
 			} else {
 				result = this.agent.getInvoice();
-				
-				if (result == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(result.toString());
-				}
+			}
+			
+			if (result == null) {
+				response.setStatus(Response.Status.SERVERERROR);
+			} else {
+				response.write(result.toString());
 			}
 			
 			break;

@@ -25,6 +25,7 @@ public interface Commander extends Closeable {
 	public JSONObject getFile();
 	public JSONObject getFile(long id, String doc);
 	public JSONObject getInvoice();
+	public JSONObject getInvoice(int type, int status, String date);
 	public JSONObject getInvoice(long project);
 	public JSONObject getItem();
 	public JSONObject getItem(long id);

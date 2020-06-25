@@ -536,6 +536,99 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
+	public JSONObject getInvoice(int type, int status, String expect) {System.out.println(type);
+		try (Connection c = this.connPool.getConnection()) {
+			String condition, statement;
+			
+			switch (status) {
+			case 1:
+				condition = "issue IS NULL AND complete IS NULL";
+				break;
+			case 2:
+				condition = "issue IS NOT NULL AND complete IS NULL";
+				break;
+			case 3:
+				condition = "issue IS NOT NULL AND complete IS NOT NULL";
+				break;
+			default:
+				condition = "TRUE";
+			}
+			
+			
+			statement = String.format("SELECT"+
+				" I.id, expect, issue, complete, amount, tax, comment, type, project, P.name"+
+				" FROM t_invoice AS I"+
+				" LEFT JOIN t_project AS P"+
+				" ON I.project=P.id"+
+				" WHERE %s? AND expect IS NOT NULL AND %s? AND %s"+
+				";",
+				type == 0? "": "type=",
+				expect == null? "": "expect<",
+				condition);
+			
+			try (PreparedStatement pstmt = c.prepareStatement(statement)) {
+				pstmt.setInt(1, type);
+				
+				if (type == 0) {
+					pstmt.setBoolean(1, true);
+				} else {
+					pstmt.setInt(1, type);
+				}
+				
+				if (expect == null) {
+					pstmt.setBoolean(2, true);
+				} else {
+					pstmt.setString(2, expect);
+				}
+				
+				try (ResultSet rs = pstmt.executeQuery()) {
+					JSONObject
+						invoiceData = new JSONObject(),
+						invoice;
+					String date;
+					
+					while (rs.next()) {
+						invoice = new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("amount", rs.getInt(5))
+							.put("tax", rs.getInt(6))
+							.put("comment", rs.getString(7))
+							.put("type", rs.getInt(8))
+							.put("project", rs.getString(9))
+							.put("pName", rs.getString(10));
+						
+						date = rs.getString(2);
+						
+						if (!rs.wasNull()) {
+							invoice.put("expect", date);
+						}
+						
+						date = rs.getString(3);
+						
+						if (!rs.wasNull()) {
+							invoice.put("issue", date);
+						}
+						
+						date = rs.getString(4);
+						
+						if (!rs.wasNull()) {
+							invoice.put("complete", date);
+						}
+						
+						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
+					}
+					
+					return invoiceData;
+				}
+			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return null;
+	}
+	
+	@Override
 	public JSONObject getInvoice(long project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
