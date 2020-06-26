@@ -1,6 +1,8 @@
 package com.itahm.erp;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.SQLException;
 
@@ -133,23 +135,43 @@ public class ERP implements Serviceable {
 						response.setStatus(Response.Status.BADREQUEST);
 						
 						response.write(new JSONObject().
-							put("error", "Command is not found.").toString());
+							put("error", String.format("Command %s not found.", data.getString("command").toUpperCase())).toString());
 					}
 				} else {
-					Object o = request.getAttribute("file");
+					String
+						type = request.getHeader("File-Target"),
+						project = request.getHeader("File-Id");
 					
-					if (o != null && o instanceof JSONObject) {
+					if (type != null && project != null) {
 						byte [] bin = request.read();
 						
 						if (bin.length > 0) {
-							JSONObject file = (JSONObject)o;
-							
-							this.agent.setFile(file.getLong("id"), file.getString("doc"), file.getString("name"), bin);
+							try {
+								if (!this.agent.addFile(Long.parseLong(project), type, URLDecoder.decode(request.getRequestURI().split("/")[1], StandardCharsets.UTF_8.name()), bin)) {
+									response.setStatus(Response.Status.SERVERERROR);
+								}
+							} catch (NumberFormatException nfe) {
+								response.setStatus(Response.Status.BADREQUEST);
+								
+								response.write(new JSONObject().
+										put("error","Number required.").toString());
+							} catch (Exception e) {
+								response.setStatus(Response.Status.BADREQUEST);
+								
+								response.write(new JSONObject().
+										put("error",e.getMessage()).toString());
+							}
 						} else {
-							response.setStatus(Response.Status.NOCONTENT);	
+							response.setStatus(Response.Status.NOCONTENT);
+							
+							response.write(new JSONObject().
+									put("error","Empty file.").toString());
 						}
 					} else {
 						response.setStatus(Response.Status.BADREQUEST);
+						
+						response.write(new JSONObject().
+								put("error","Insufficient header.").toString());
 					}
 				}
 			}
@@ -280,22 +302,20 @@ public class ERP implements Serviceable {
 			break;
 		case "FILE":
 			if (request.has("id")) {
-				if (request.has("binary")) {
-					byte [] binary = this.agent.download(request.getLong("id"), request.getString("doc"));
-					
-					if (binary != null) {
-						response.write(binary);
-					} else {
-						response.setStatus(Response.Status.NOCONTENT);
-					}
+				byte [] binary = this.agent.download(request.getLong("id"));
+				
+				if (binary != null) {
+					response.write(binary);
 				} else {
-					JSONObject file = this.agent.getFile(request.getLong("id"), request.getString("doc"));
-					
-					if (file != null) {
-						response.write(file.toString());
-					} else {
-						response.setStatus(Response.Status.NOCONTENT);
-					}
+					response.setStatus(Response.Status.NOCONTENT);
+				}
+			} else if (request.has("tid") && request.has("type")) {
+				JSONObject fileData = this.agent.getFile(request.getLong("tid"), request.getString("type"));
+				
+				if (fileData != null) {
+					response.write(fileData.toString());
+				} else {
+					response.setStatus(Response.Status.SERVERERROR);
 				}
 			} else {
 				JSONObject fileData = this.agent.getFile();
@@ -482,7 +502,7 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "FILE":
-			if (!agent.removeFile(request.getLong("id"), request.getString("doc"))) {
+			if (!agent.removeFile(request.getLong("id"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			

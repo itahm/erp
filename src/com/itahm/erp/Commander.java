@@ -8,6 +8,7 @@ import com.itahm.json.JSONObject;
 public interface Commander extends Closeable {
 	public boolean addCompany(JSONObject company);
 	public boolean addCar(JSONObject car);
+	public boolean addFile(long id, String target, String name, byte [] binary);
 	public boolean addInvoice(JSONObject invoice);
 	public boolean addItem(JSONObject item);
 	public boolean addManager(JSONObject manager);
@@ -17,7 +18,7 @@ public interface Commander extends Closeable {
 	public boolean addSpend(JSONObject spend, long id);
 	public boolean addUser(JSONObject user);
 	public void backup() throws Exception;
-	public byte [] download(long id, String doc);
+	public byte [] download(long id);
 	public JSONObject getCar();
 	public JSONObject getCar(long id);
 	public JSONObject getCompany();
@@ -46,7 +47,7 @@ public interface Commander extends Closeable {
 	public boolean removeCompany(String id);
 	public boolean removeInvoice(long id);
 	public boolean removeItem(long id);
-	public boolean removeFile(long id, String doc);
+	public boolean removeFile(long id);
 	public boolean removeManager(long id);
 	public boolean removeProject(long id);
 	public boolean removeReport(long id, String doc);
@@ -54,7 +55,6 @@ public interface Commander extends Closeable {
 	public boolean removeUser(long id);
 	public boolean setCar(long id, JSONObject car);
 	public boolean setCompany(String id, JSONObject company);
-	public boolean setFile(long id, String doc, String name, byte [] binary);
 	public boolean setInvoice(long id, JSONObject invoice);
 	public boolean setItem(long id, JSONObject item);
 	public boolean setManager(long id, JSONObject manager);

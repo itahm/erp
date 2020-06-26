@@ -1,15 +1,17 @@
 package com.itahm.erp;
 
-import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.util.UUID;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 
@@ -22,6 +24,7 @@ public class H2Agent implements Commander, Closeable {
 	private final JdbcConnectionPool connPool;
 	
 	private final Path root;
+	private final Path attach;
 	
 	{
 		try {
@@ -39,6 +42,12 @@ public class H2Agent implements Commander, Closeable {
 		root = path;
 		
 		connPool = JdbcConnectionPool.create(String.format("jdbc:h2:%s", path.resolve("erp").toString()), "sa", "");
+		
+		attach = path.resolve("attach");
+		
+		if (!Files.isDirectory(attach)) {
+			Files.createDirectories(attach);
+		}
 		
 		initTable();
 		initData();
@@ -85,6 +94,37 @@ public class H2Agent implements Commander, Closeable {
 		}
 		
 		return false;	
+	}
+	
+	@Override
+	public boolean addFile(long tid, String type, String name, byte [] bin) {
+		String uuid = UUID.randomUUID().toString().toUpperCase();
+		
+		try {
+			Files.write(this.attach.resolve(uuid), bin, StandardOpenOption.CREATE_NEW);
+			
+			try (Connection c = this.connPool.getConnection()) {
+				try (PreparedStatement pstmt = c.prepareStatement("Insert INTO t_file"+
+					" (tid, type, name, file)"+
+					" VALUES(?, ?, ?, ?);")) {
+					
+					pstmt.setLong(1, tid);
+					pstmt.setString(2, type);
+					pstmt.setString(3, name);
+					pstmt.setString(4, uuid);
+					
+					pstmt.executeUpdate();
+					
+					return true;
+				}
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return false;
 	}
 	
 	@Override
@@ -294,17 +334,16 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public byte [] download(long id, String doc) {
+	public byte [] download(long id) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT file" + 
-				" FROM file"+
-				" WHERE doc_id=? AND doc_name=?;")) {
+				" FROM t_file"+
+				" WHERE id=?;")) {
 				pstmt.setLong(1, id);
-				pstmt.setString(2, doc);
 				
 				try (ResultSet rs = pstmt.executeQuery()) {
 					if (rs.next()) {
-						return rs.getBinaryStream(1).readAllBytes();
+						return Files.readAllBytes(this.attach.resolve(rs.getString(1)));
 					}
 				}
 			}
@@ -434,13 +473,14 @@ public class H2Agent implements Commander, Closeable {
 					fileData = new JSONObject(),
 					file;
 				
-				try (ResultSet rs = stmt.executeQuery("SELECT doc_id, doc_name, name"+
-					" FROM file;")) {
+				try (ResultSet rs = stmt.executeQuery("SELECT id, type, tid, name"+
+					" FROM t_file;")) {
 					while (rs.next()) {
 						file = new JSONObject()
 							.put("id", rs.getLong(1))
-							.put("doc", rs.getString(2))
-							.put("name", rs.getString(3));
+							.put("type", rs.getString(2))
+							.put("tid", rs.getLong(3))
+							.put("name", rs.getString(4));
 						
 						fileData.put(Long.toString(rs.getLong(1)), file);
 					}
@@ -456,20 +496,24 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getFile(long id, String doc) {
+	public JSONObject getFile(long tid, String type) {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("SELECT name" + 
-				" FROM file WHERE doc_id=? AND doc_name=?;")) {
-				pstmt.setLong(1, id);
-				pstmt.setString(2, doc);
+			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name" + 
+				" FROM t_file"+
+				" WHERE tid=? AND type=?;")) {
+				pstmt.setLong(1, tid);
+				pstmt.setString(2, type);
 				
 				try (ResultSet rs = pstmt.executeQuery()) {
-					if (rs.next()) {
-						return new JSONObject()
-							.put("id", id)
-							.put("doc", doc)
-							.put("name", rs.getString(1));
+					JSONObject fileData = new JSONObject();
+					
+					while (rs.next()) {
+						fileData.put(Long.toString(rs.getLong(1)), new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("name", rs.getString(2)));
 					}
+					
+					return fileData;
 				}
 			}
 		} catch (SQLException sqle) {
@@ -1029,7 +1073,7 @@ public class H2Agent implements Commander, Closeable {
 			try (Statement stmt = c.createStatement()) {
 				try (PreparedStatement pstmt = c.prepareStatement("SELECT s.id, date, type, target, amount, name"+
 					" FROM spend AS s"+
-					" LEFT JOIN file AS f"+
+					" LEFT JOIN t_file AS f"+
 					" ON s.id=f.doc_id AND f.doc_name='spend'"+
 					" LEFT JOIN report AS r"+
 					" ON s.id=r.doc_id AND r.doc_name='spend'"+
@@ -1076,7 +1120,7 @@ public class H2Agent implements Commander, Closeable {
 			try (Statement stmt = c.createStatement()) {
 				try (PreparedStatement pstmt = c.prepareStatement("SELECT date, type, target, amount, name"+
 					" FROM spend AS s"+
-					" LEFT JOIN file AS f"+
+					" LEFT JOIN t_file AS f"+
 					" ON s.id=doc_id AND doc_name='spend'"+
 					" WHERE id=?;")) {
 					pstmt.setLong(1, id);
@@ -1212,12 +1256,15 @@ public class H2Agent implements Commander, Closeable {
 			 * FILE
 			 **/
 			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS file ("+
-					"doc_id BIGINT NOT NULL"+
-					", doc_name VARCHAR NOT NULL"+
+				stmt.executeUpdate("DROP TABLE IF EXISTS t_file");
+			}
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_file"+
+					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
+					", tid BIGINT NOT NULL"+
+					", type VARCHAR NOT NULL"+
 					", name VARCHAR NOT NULL"+
-					", file BLOB NOT NULL"+
-					", UNIQUE(doc_id, doc_name)"+
+					", file VARCHAR NOT NULL"+
 					");");
 			}
 			/**END**/
@@ -1456,13 +1503,25 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public boolean removeFile(long id, String doc) {
+	public boolean removeFile(long id) {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
-				" FROM file"+
-				" WHERE doc_id=? AND doc_name=?;")) {
+			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
+				" file"+
+				" FROM t_file"+
+				" WHERE id=?;")) {
 				pstmt.setLong(1, id);
-				pstmt.setString(2, doc);
+				
+				try (ResultSet rs = pstmt.executeQuery()) {
+					if (rs.next()) {
+						Files.delete(this.attach.resolve(rs.getString(1)));
+					}
+				}
+			}
+			
+			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
+				" FROM t_file"+
+				" WHERE id=?;")) {
+				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
 				
@@ -1470,6 +1529,8 @@ public class H2Agent implements Commander, Closeable {
 			}
 		} catch (SQLException sqle) {
 			sqle.printStackTrace();
+		} catch (IOException ioe) {
+			ioe.printStackTrace();
 		}
 		
 		return false;
@@ -1597,7 +1658,7 @@ public class H2Agent implements Commander, Closeable {
 			
 			try {
 				try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
-					" FROM file"+
+					" FROM t_file"+
 					" WHERE doc_id=? AND doc_name='spend';")) {
 					pstmt.setLong(1, id);
 					
@@ -1695,26 +1756,6 @@ public class H2Agent implements Commander, Closeable {
 			}
 			
 			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;
-	}
-	
-	@Override
-	public boolean setFile(long id, String doc, String name, byte [] binary) {
-		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("MERGE INTO file"+
-				" KEY (doc_id, doc_name)"+
-				" VALUES(?, ?, ?, ?);")) {
-				pstmt.setLong(1, id);
-				pstmt.setString(2, doc);
-				pstmt.setString(3, name);
-				pstmt.setBinaryStream(4, new ByteArrayInputStream(binary));
-				
-				pstmt.executeUpdate();
-			}
 		} catch (SQLException sqle) {
 			sqle.printStackTrace();
 		}

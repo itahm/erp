@@ -2,7 +2,6 @@ package com.itahm.erp;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -71,13 +70,6 @@ public class ITAhM extends HTTPServer {
 	
 	@Override
 	public void doPost(Request request, Response response) {
-		String origin = request.getHeader(com.itahm.http.Connection.Header.ORIGIN.toString());
-		
-		if (origin != null) {
-			response.setHeader("Access-Control-Allow-Origin", origin);
-			response.setHeader("Access-Control-Allow-Credentials", "true");
-		}
-
 		try {
 			JSONObject data = new JSONObject(new String(request.read(), StandardCharsets.UTF_8.name()));
 			
@@ -110,32 +102,13 @@ public class ITAhM extends HTTPServer {
 	}
 	
 	@Override
-	public void doPut(Request request, Response response) {
-		String origin = request.getHeader(com.itahm.http.Connection.Header.ORIGIN.toString());
-		
-		if (origin != null) {
-			response.setHeader("Access-Control-Allow-Origin", origin);
-			response.setHeader("Access-Control-Allow-Credentials", "true");
-		}
-		
-		String [] uri = request.getRequestURI().split("/");
-		
-		if (uri.length == 4) {
-			try {
-				System.out.println();
-				request.setAttribute("file", new JSONObject()
-					.put("id", Long.parseLong(uri[1]))
-					.put("doc", uri[2])
-					.put("name", URLDecoder.decode(uri[3], StandardCharsets.UTF_8.name())));
-				
-				this.erp.service(request, response, null);
-				
-				return;
-			} catch (UnsupportedEncodingException uee) {
-				uee.printStackTrace();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+	public void doPut(Request request, Response response) {		
+		try {
+			this.erp.service(request, response, null);
+			
+			return;
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 		
 		response.setStatus(Response.Status.BADREQUEST);
