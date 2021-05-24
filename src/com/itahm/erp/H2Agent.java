@@ -580,7 +580,7 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getInvoice(int type, int status, String expect) {System.out.println(type);
+	public JSONObject getInvoice(int type, int status, String expect) {
 		try (Connection c = this.connPool.getConnection()) {
 			String condition, statement;
 			
@@ -638,7 +638,7 @@ public class H2Agent implements Commander, Closeable {
 							.put("tax", rs.getInt(6))
 							.put("comment", rs.getString(7))
 							.put("type", rs.getInt(8))
-							.put("project", rs.getString(9))
+							.put("project", rs.getLong(9))
 							.put("pName", rs.getString(10));
 						
 						date = rs.getString(2);
@@ -676,7 +676,7 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getInvoice(long project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" id, expect, issue, complete, amount, tax, comment, type"+
+				" id, expect, issue, complete, amount, tax, comment, type, invoice"+
 				" FROM t_invoice"+
 				" WHERE project=?"+
 				";")) {
@@ -687,6 +687,7 @@ public class H2Agent implements Commander, Closeable {
 						invoiceData = new JSONObject(),
 						invoice;
 					String date;
+					long value;
 					
 					while (rs.next()) {
 						invoice = new JSONObject()
@@ -712,6 +713,12 @@ public class H2Agent implements Commander, Closeable {
 						
 						if (!rs.wasNull()) {
 							invoice.put("complete", date);
+						}
+						
+						value = rs.getLong(9);
+						
+						if (!rs.wasNull()) {
+							invoice.put("invoice", value);
 						}
 						
 						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
@@ -912,7 +919,6 @@ public class H2Agent implements Commander, Closeable {
 		} catch (SQLException sqle) {
 			sqle.printStackTrace();
 		}
-		
 		return null;	
 	}
 	
@@ -1256,9 +1262,6 @@ public class H2Agent implements Commander, Closeable {
 			 * FILE
 			 **/
 			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("DROP TABLE IF EXISTS t_file");
-			}
-			try (Statement stmt = c.createStatement()) {
 				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_file"+
 					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
 					", tid BIGINT NOT NULL"+
@@ -1266,28 +1269,6 @@ public class H2Agent implements Commander, Closeable {
 					", name VARCHAR NOT NULL"+
 					", file VARCHAR NOT NULL"+
 					");");
-			}
-			/**END**/
-			
-			/**
-			 * INVOICE
-			 **/
-			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_invoice"+
-					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
-					", expect DATE DEFAULT NULL"+
-					", issue DATE DEFAULT NULL"+
-					", complete DATE DEFAULT NULL"+
-					", amount INTEGER NOT NULL DEFAULT 0"+
-					", tax INTEGER NOT NULL DEFAULT 0"+
-					", comment INTEGER NOT NULL DEFAULT ''"+
-					", type INTEGER NOT NULL"+
-					", project BIGINT NOT NULL"+
-					", CONSTRAINT FK_PROJECT_INVOICE FOREIGN KEY (project) REFERENCES t_project(id)"+
-					");");
-			}
-			try (Statement stmt = c.createStatement()) {
-				stmt.executeUpdate("ALTER TABLE IF EXISTS t_invoice ADD COLUMN IF NOT EXISTS tax INTEGER NOT NULL DEFAULT 0;");
 			}
 			/**END**/
 			
@@ -1343,6 +1324,27 @@ public class H2Agent implements Commander, Closeable {
 			}
 			/**END**/
 			
+			/**
+			 * INVOICE
+			 **/
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_invoice"+
+					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
+					", expect DATE DEFAULT NULL"+
+					", issue DATE DEFAULT NULL"+
+					", complete DATE DEFAULT NULL"+
+					", amount INTEGER NOT NULL DEFAULT 0"+
+					", tax INTEGER NOT NULL DEFAULT 0"+
+					", comment INTEGER NOT NULL DEFAULT ''"+
+					", type INTEGER NOT NULL"+
+					", project BIGINT NOT NULL"+
+					", invoice BIGINT DEFAULT NULL"+
+					", CONSTRAINT FK_PROJECT_INVOICE FOREIGN KEY (project) REFERENCES t_project(id)"+
+					", CONSTRAINT FK_INVOICE_INVOICE FOREIGN KEY (invoice) REFERENCES t_invoice(id)"+
+					");");
+			}
+			/**END**/
+				
 			/**
 			 * REPORT
 			 **/
