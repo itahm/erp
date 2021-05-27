@@ -130,10 +130,43 @@ public class H2Agent implements Commander, Closeable {
 	@Override
 	public boolean addInvoice(JSONObject invoice) {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_invoice (type, project)"+
-				" VALUES(?, ?);")) {
-				pstmt.setInt(1, invoice.getInt("type"));
-				pstmt.setLong(2, invoice.getLong("project"));
+			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_invoice"+
+				" (expect, issue, complete, amount, tax, comment, project, invoice, company)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				if (invoice.has("expect")) {
+					pstmt.setString(1, invoice.getString("expect"));
+				} else {
+					pstmt.setNull(1, Types.NULL);
+				}
+				
+				if (invoice.has("issue")) {
+					pstmt.setString(2, invoice.getString("issue"));
+				} else {
+					pstmt.setNull(2, Types.NULL);
+				}
+				
+				if (invoice.has("complete")) {
+					pstmt.setString(3, invoice.getString("complete"));
+				} else {
+					pstmt.setNull(3, Types.NULL);
+				}
+				
+				if (invoice.has("invoice")) {
+					pstmt.setLong(8, invoice.getLong("invoice"));
+				} else {
+					pstmt.setNull(8, Types.NULL);
+				}
+				
+				if (invoice.has("company")) {
+					pstmt.setString(9, invoice.getString("company"));
+				} else {
+					pstmt.setNull(9, Types.NULL);
+				}
+				
+				pstmt.setInt(4, invoice.getInt("amount"));
+				pstmt.setInt(5, invoice.getInt("tax"));
+				pstmt.setString(6, invoice.getString("comment"));
+				pstmt.setLong(7, invoice.getLong("project"));
 				
 				pstmt.executeUpdate();
 			}
@@ -219,18 +252,16 @@ public class H2Agent implements Commander, Closeable {
 	public boolean addProject(JSONObject project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_project"+
-				" (name, contract, deposit, start, end, payment, content, company, origin, manager)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				" (name, deposit, start, end, content, company, origin, manager)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?);")) {
 				pstmt.setString(1, project.getString("name"));
-				pstmt.setString(2, project.getString("contract"));
-				pstmt.setLong(3, project.getLong("deposit"));
-				pstmt.setString(4, project.getString("start"));
-				pstmt.setString(5, project.getString("end"));
-				pstmt.setString(6, project.getString("payment"));
-				pstmt.setString(7, project.getString("content"));
-				pstmt.setString(8, project.getString("company"));
-				pstmt.setString(9, project.getString("origin"));
-				pstmt.setLong(10, project.getLong("manager"));
+				pstmt.setLong(2, project.getLong("deposit"));
+				pstmt.setString(3, project.getString("start"));
+				pstmt.setString(4, project.getString("end"));
+				pstmt.setString(5, project.getString("content"));
+				pstmt.setString(6, project.getString("company"));
+				pstmt.setString(7, project.getString("origin"));
+				pstmt.setLong(8, project.getLong("manager"));
 				
 				pstmt.executeUpdate();
 			}
@@ -528,15 +559,15 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" I.id, expect, issue, complete, amount, tax, comment, type, project, P.name"+
+					" I.id, expect, issue, complete, amount, tax, comment, project, P.name, C.id, C.name"+
 					" FROM t_invoice AS I"+
-					" LEFT JOIN t_project AS P"+
-					" ON I.project=P.id"+
+					" LEFT JOIN t_project AS P ON I.project=P.id"+
+					" LEFT JOIN t_company AS C ON I.company=C.id"+
 					";")) {
 					JSONObject
 						invoiceData = new JSONObject(),
 						invoice;
-					String date;
+					String value;
 					
 					while (rs.next()) {
 						invoice = new JSONObject()
@@ -544,26 +575,37 @@ public class H2Agent implements Commander, Closeable {
 							.put("amount", rs.getInt(5))
 							.put("tax", rs.getInt(6))
 							.put("comment", rs.getString(7))
-							.put("type", rs.getInt(8))
-							.put("project", rs.getLong(9))
-							.put("pName", rs.getString(10));
+							.put("project", rs.getLong(8))
+							.put("pName", rs.getString(9));
 						
-						date = rs.getString(2);
+						value = rs.getString(2);
 						
 						if (!rs.wasNull()) {
-							invoice.put("expect", date);
+							invoice.put("expect", value);
 						}
 						
-						date = rs.getString(3);
+						value = rs.getString(3);
 						
 						if (!rs.wasNull()) {
-							invoice.put("issue", date);
+							invoice.put("issue", value);
 						}
 						
-						date = rs.getString(4);
+						value = rs.getString(4);
 						
 						if (!rs.wasNull()) {
-							invoice.put("complete", date);
+							invoice.put("complete", value);
+						}
+						
+						value = rs.getString(10);
+						
+						if (!rs.wasNull()) {
+							invoice.put("company", value);
+						}
+						
+						value = rs.getString(11);
+						
+						if (!rs.wasNull()) {
+							invoice.put("cName", value);
 						}
 						
 						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
@@ -582,54 +624,59 @@ public class H2Agent implements Commander, Closeable {
 	@Override
 	public JSONObject getInvoice(int type, int status, String expect) {
 		try (Connection c = this.connPool.getConnection()) {
-			String condition, statement;
+			String condition1, condition2, statement;
+			
+			switch (type) {
+			case 1:
+				condition1 = "invoice IS NULL";
+				break;
+			case 2:
+				condition1 = "invoice IS NOT NULL";
+				break;
+			default:
+				condition1 = "TRUE";
+			}
 			
 			switch (status) {
 			case 1:
-				condition = "issue IS NULL AND complete IS NULL";
+				condition2 = "issue IS NULL AND complete IS NULL";
 				break;
 			case 2:
-				condition = "issue IS NOT NULL AND complete IS NULL";
+				condition2 = "issue IS NOT NULL AND complete IS NULL";
 				break;
 			case 3:
-				condition = "issue IS NOT NULL AND complete IS NOT NULL";
+				condition2 = "issue IS NOT NULL AND complete IS NOT NULL";
 				break;
 			default:
-				condition = "TRUE";
+				condition2 = "TRUE";
 			}
 			
-			
 			statement = String.format("SELECT"+
-				" I.id, expect, issue, complete, amount, tax, comment, type, project, P.name"+
+				" I.id, expect, issue, complete, amount, tax, comment, project, P.name, invoice"+
 				" FROM t_invoice AS I"+
 				" LEFT JOIN t_project AS P"+
 				" ON I.project=P.id"+
-				" WHERE %s? AND expect IS NOT NULL AND %s? AND %s"+
+				" WHERE %s AND expect IS NOT NULL AND %s? AND %s"+
 				";",
-				type == 0? "": "type=",
+				condition1,
 				expect == null? "": "expect<",
-				condition);
+				condition2);
 			
 			try (PreparedStatement pstmt = c.prepareStatement(statement)) {
 				pstmt.setInt(1, type);
 				
-				if (type == 0) {
+				if (expect == null) {
 					pstmt.setBoolean(1, true);
 				} else {
-					pstmt.setInt(1, type);
-				}
-				
-				if (expect == null) {
-					pstmt.setBoolean(2, true);
-				} else {
-					pstmt.setString(2, expect);
+					pstmt.setString(1, expect);
 				}
 				
 				try (ResultSet rs = pstmt.executeQuery()) {
 					JSONObject
 						invoiceData = new JSONObject(),
 						invoice;
-					String date;
+					String value;
+					long id;
 					
 					while (rs.next()) {
 						invoice = new JSONObject()
@@ -637,26 +684,31 @@ public class H2Agent implements Commander, Closeable {
 							.put("amount", rs.getInt(5))
 							.put("tax", rs.getInt(6))
 							.put("comment", rs.getString(7))
-							.put("type", rs.getInt(8))
-							.put("project", rs.getLong(9))
-							.put("pName", rs.getString(10));
+							.put("project", rs.getLong(8))
+							.put("pName", rs.getString(9));
 						
-						date = rs.getString(2);
+						value = rs.getString(2);
 						
 						if (!rs.wasNull()) {
-							invoice.put("expect", date);
+							invoice.put("expect", value);
 						}
 						
-						date = rs.getString(3);
+						value = rs.getString(3);
 						
 						if (!rs.wasNull()) {
-							invoice.put("issue", date);
+							invoice.put("issue", value);
 						}
 						
-						date = rs.getString(4);
+						value = rs.getString(4);
 						
 						if (!rs.wasNull()) {
-							invoice.put("complete", date);
+							invoice.put("complete", value);
+						}
+						
+						id = rs.getLong(10);
+						
+						if (!rs.wasNull()) {
+							invoice.put("invoice", id);
 						}
 						
 						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
@@ -676,8 +728,9 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getInvoice(long project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" id, expect, issue, complete, amount, tax, comment, type, invoice"+
-				" FROM t_invoice"+
+				" I.id, expect, issue, complete, amount, tax, comment, invoice, C.id, C.name"+
+				" FROM t_invoice AS I"+
+				" LEFT JOIN t_company AS C ON I.company=C.id"+
 				" WHERE project=?"+
 				";")) {
 				pstmt.setLong(1, project);
@@ -686,39 +739,50 @@ public class H2Agent implements Commander, Closeable {
 					JSONObject
 						invoiceData = new JSONObject(),
 						invoice;
-					String date;
-					long value;
+					String value;
+					long id;
 					
 					while (rs.next()) {
 						invoice = new JSONObject()
 							.put("id", rs.getLong(1))
 							.put("amount", rs.getInt(5))
 							.put("tax", rs.getInt(6))
-							.put("comment", rs.getString(7))
-							.put("type", rs.getInt(8));
+							.put("comment", rs.getString(7));
 						
-						date = rs.getString(2);
+						value = rs.getString(2);
 						
 						if (!rs.wasNull()) {
-							invoice.put("expect", date);
+							invoice.put("expect", value);
 						}
 						
-						date = rs.getString(3);
+						value = rs.getString(3);
 						
 						if (!rs.wasNull()) {
-							invoice.put("issue", date);
+							invoice.put("issue", value);
 						}
 						
-						date = rs.getString(4);
+						value = rs.getString(4);
 						
 						if (!rs.wasNull()) {
-							invoice.put("complete", date);
+							invoice.put("complete", value);
 						}
 						
-						value = rs.getLong(9);
+						id = rs.getLong(8);
 						
 						if (!rs.wasNull()) {
-							invoice.put("invoice", value);
+							invoice.put("invoice", id);
+						}
+						
+						value = rs.getString(9);
+						
+						if (!rs.wasNull()) {
+							invoice.put("company", value);
+						}
+						
+						value = rs.getString(10);
+						
+						if (!rs.wasNull()) {
+							invoice.put("cName", value);
 						}
 						
 						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
@@ -965,7 +1029,7 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" P.id, P.name, contract, deposit, start, end, payment, content, C.name, C2.name, manager"+
+					" P.id, P.name, deposit, start, end, content, C.name, C2.name, manager"+
 					" FROM t_project AS P"+
 					" LEFT JOIN t_company AS C"+
 					" ON P.company=C.id"+
@@ -980,15 +1044,13 @@ public class H2Agent implements Commander, Closeable {
 						project = new JSONObject()
 							.put("id", rs.getLong(1))
 							.put("name", rs.getString(2))
-							.put("contract", rs.getString(3))
-							.put("deposit", rs.getLong(4))
-							.put("start", rs.getString(5))
-							.put("end", rs.getString(6))
-							.put("payment", rs.getString(7))
-							.put("content", rs.getString(8))
-							.put("company", rs.getString(9))
-							.put("origin", rs.getString(10))
-							.put("manager", rs.getLong(11));
+							.put("deposit", rs.getLong(3))
+							.put("start", rs.getString(4))
+							.put("end", rs.getString(5))
+							.put("content", rs.getString(6))
+							.put("company", rs.getString(7))
+							.put("origin", rs.getString(8))
+							.put("manager", rs.getLong(9));
 						prjData.put(Long.toString(rs.getLong(1)), project);
 					}
 					
@@ -1006,7 +1068,7 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getProject(long id) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" name, contract, deposit, start, end, payment, content, company, origin, manager"+
+				" name, deposit, start, end, content, company, origin, manager"+
 				" FROM t_project"+
 				" WHERE id=?"+
 				";")) {
@@ -1017,15 +1079,13 @@ public class H2Agent implements Commander, Closeable {
 						return new JSONObject()
 							.put("id", id)
 							.put("name", rs.getString(1))
-							.put("contract", rs.getString(2))
-							.put("deposit", rs.getLong(3))
-							.put("start", rs.getString(4))
-							.put("end", rs.getString(5))
-							.put("payment", rs.getString(6))
-							.put("content", rs.getString(7))
-							.put("company", rs.getString(8))
-							.put("origin", rs.getString(9))
-							.put("manager", rs.getString(10));
+							.put("deposit", rs.getLong(2))
+							.put("start", rs.getString(3))
+							.put("end", rs.getString(4))
+							.put("content", rs.getString(5))
+							.put("company", rs.getString(6))
+							.put("origin", rs.getString(7))
+							.put("manager", rs.getString(8));
 					}
 				}
 			}
@@ -1309,11 +1369,9 @@ public class H2Agent implements Commander, Closeable {
 				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_project ("+
 					"id BIGINT PRIMARY KEY AUTO_INCREMENT"+
 					", name VARCHAR NOT NULL"+
-					", contract date NOT NULL DEFAULT CURRENT_DATE"+
 					", deposit bigint NOT NULL"+
 					", start date NOT NULL DEFAULT CURRENT_DATE"+
 					", end date NOT NULL DEFAULT CURRENT_DATE"+
-					", payment VARCHAR NOT NULL"+
 					", content VARCHAR NOT NULL DEFAULT ''"+
 					", company VARCHAR NOT NULL"+
 					", origin VARCHAR NOT NULL"+
@@ -1336,11 +1394,12 @@ public class H2Agent implements Commander, Closeable {
 					", amount INTEGER NOT NULL DEFAULT 0"+
 					", tax INTEGER NOT NULL DEFAULT 0"+
 					", comment INTEGER NOT NULL DEFAULT ''"+
-					", type INTEGER NOT NULL"+
 					", project BIGINT NOT NULL"+
 					", invoice BIGINT DEFAULT NULL"+
+					", company VARCHAR DEFAULT NULL"+
 					", CONSTRAINT FK_PROJECT_INVOICE FOREIGN KEY (project) REFERENCES t_project(id)"+
 					", CONSTRAINT FK_INVOICE_INVOICE FOREIGN KEY (invoice) REFERENCES t_invoice(id)"+
+					", CONSTRAINT FK_INVOICE_COMPANY FOREIGN KEY (company) REFERENCES t_company(id)"+
 					");");
 			}
 			/**END**/
@@ -1774,7 +1833,8 @@ public class H2Agent implements Commander, Closeable {
 				" complete=?,"+
 				" amount=?,"+
 				" tax=?,"+
-				" comment=?"+
+				" comment=?,"+
+				" company=?"+
 				" WHERE id=?;")) {
 				if (invoice.has("expect")) {
 					pstmt.setString(1, invoice.getString("expect"));
@@ -1794,10 +1854,16 @@ public class H2Agent implements Commander, Closeable {
 					pstmt.setNull(3, Types.NULL);
 				}
 				
+				if (invoice.has("company")) {
+					pstmt.setString(7, invoice.getString("company"));
+				} else {
+					pstmt.setNull(7, Types.NULL);
+				}
+				
 				pstmt.setInt(4, invoice.getInt("amount"));
 				pstmt.setInt(5, invoice.getInt("tax"));
 				pstmt.setString(6, invoice.getString("comment"));
-				pstmt.setLong(7, id);
+				pstmt.setLong(8, id);
 				
 				pstmt.executeUpdate();
 			}
@@ -1925,11 +1991,9 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_project"+
 				" SET name=?,"+
-				" contract=?,"+
 				" deposit=?,"+
 				" start=?,"+
 				" end=?,"+
-				" payment=?,"+
 				" content=?,"+
 				" company=?,"+
 				" origin=?"+
@@ -1937,15 +2001,13 @@ public class H2Agent implements Commander, Closeable {
 				";")) {
 				
 				pstmt.setString(1, project.getString("name"));
-				pstmt.setString(2, project.getString("contract"));
-				pstmt.setLong(3, project.getLong("deposit"));
-				pstmt.setString(4, project.getString("start"));
-				pstmt.setString(5, project.getString("end"));
-				pstmt.setString(6, project.getString("payment"));
-				pstmt.setString(7, project.getString("content"));
-				pstmt.setString(8, project.getString("company"));
-				pstmt.setString(9, project.getString("origin"));
-				pstmt.setLong(10, id);
+				pstmt.setLong(2, project.getLong("deposit"));
+				pstmt.setString(3, project.getString("start"));
+				pstmt.setString(4, project.getString("end"));
+				pstmt.setString(5, project.getString("content"));
+				pstmt.setString(6, project.getString("company"));
+				pstmt.setString(7, project.getString("origin"));
+				pstmt.setLong(8, id);
 				
 				pstmt.executeUpdate();
 				
