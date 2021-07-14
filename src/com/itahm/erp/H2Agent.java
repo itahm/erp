@@ -11,6 +11,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.UUID;
 
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -131,7 +133,7 @@ public class H2Agent implements Commander, Closeable {
 	public boolean addInvoice(JSONObject invoice) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_invoice"+
-				" (expect, issue, complete, amount, tax, comment, project, invoice, company)"+
+				" (expect, confirm, complete, amount, tax, comment, project, invoice, company)"+
 				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
 				if (invoice.has("expect")) {
 					pstmt.setString(1, invoice.getString("expect"));
@@ -139,8 +141,8 @@ public class H2Agent implements Commander, Closeable {
 					pstmt.setNull(1, Types.NULL);
 				}
 				
-				if (invoice.has("issue")) {
-					pstmt.setString(2, invoice.getString("issue"));
+				if (invoice.has("confirm")) {
+					pstmt.setBoolean(2, invoice.getBoolean("confirm"));
 				} else {
 					pstmt.setNull(2, Types.NULL);
 				}
@@ -559,7 +561,7 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" I.id, expect, issue, complete, amount, tax, comment, project, P.name, C.id, C.name"+
+					" I.id, expect, confirm, complete, amount, tax, comment, project, P.name, invoice, C.id, C.name"+
 					" FROM t_invoice AS I"+
 					" LEFT JOIN t_project AS P ON I.project=P.id"+
 					" LEFT JOIN t_company AS C ON I.company=C.id"+
@@ -568,6 +570,8 @@ public class H2Agent implements Commander, Closeable {
 						invoiceData = new JSONObject(),
 						invoice;
 					String value;
+					long id;
+					boolean confirm;
 					
 					while (rs.next()) {
 						invoice = new JSONObject()
@@ -584,10 +588,10 @@ public class H2Agent implements Commander, Closeable {
 							invoice.put("expect", value);
 						}
 						
-						value = rs.getString(3);
+						confirm = rs.getBoolean(3);
 						
 						if (!rs.wasNull()) {
-							invoice.put("issue", value);
+							invoice.put("confirm", confirm);
 						}
 						
 						value = rs.getString(4);
@@ -596,10 +600,134 @@ public class H2Agent implements Commander, Closeable {
 							invoice.put("complete", value);
 						}
 						
-						value = rs.getString(10);
+						id = rs.getLong(10);
+						
+						if (!rs.wasNull()) {
+							invoice.put("invoice", id);
+						}
+						
+						value = rs.getString(11);
 						
 						if (!rs.wasNull()) {
 							invoice.put("company", value);
+						}
+						
+						value = rs.getString(12);
+						
+						if (!rs.wasNull()) {
+							invoice.put("cName", value);
+						}
+						
+						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
+					}
+					
+					return invoiceData;
+				}
+			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return null;
+	}
+	
+	@Override
+	public JSONObject getInvoice(int type, int status, int date) {
+		try (Connection c = this.connPool.getConnection()) {
+			String condition1, condition2, condition3, statement;
+			
+			switch (type) {
+			case 1:
+				condition1 = "invoice IS NULL";
+				break;
+			case 2:
+				condition1 = "invoice IS NOT NULL";
+				break;
+			default:
+				condition1 = "TRUE";
+			}
+			
+			switch (status) {
+			case 1:
+				condition2 = "confirm IS NULL";
+				break;
+			case 2:
+				condition2 = "confirm=FALSE";
+				break;
+			case 3:
+				condition2 = "confirm=TRUE AND complete IS NULL";
+				break;
+			case 4:
+				condition2 = "complete IS NOT NULL";
+				break;
+			default:
+				condition2 = "TRUE";
+			}
+			
+			if (date == 0) {
+				condition3 = "TRUE";
+			} else {
+				Calendar cal = Calendar.getInstance();
+				
+				cal.add(Calendar.MONTH, date);
+				
+				if (date > 0){
+					condition3 = String.format("expect<'%s'", new SimpleDateFormat("yyyy-MM-dd").format(cal.getTime()));
+				} else {
+					condition3 = String.format("expect>'%s'", new SimpleDateFormat("yyyy-MM-dd").format(cal.getTime()));
+					
+				}
+			}
+			
+			statement = String.format("SELECT"+
+				" I.id, expect, confirm, complete, amount, tax, comment, project, P.name, invoice, C.name"+
+				" FROM t_invoice AS I"+
+				" LEFT JOIN t_project AS P ON I.project=P.id"+
+				" LEFT JOIN t_company AS C ON I.company=C.id"+
+				" WHERE %s AND %s AND expect IS NOT NULL AND %s"+
+				";",
+				condition1, condition2, condition3);
+			
+			try (PreparedStatement pstmt = c.prepareStatement(statement)) {
+				try (ResultSet rs = pstmt.executeQuery()) {
+					JSONObject
+						invoiceData = new JSONObject(),
+						invoice;
+					String value;
+					long id;
+					boolean confirm;
+					
+					while (rs.next()) {
+						invoice = new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("amount", rs.getInt(5))
+							.put("tax", rs.getInt(6))
+							.put("comment", rs.getString(7))
+							.put("project", rs.getLong(8))
+							.put("pName", rs.getString(9));
+						
+						value = rs.getString(2);
+						
+						if (!rs.wasNull()) {
+							invoice.put("expect", value);
+						}
+						
+						confirm = rs.getBoolean(3);
+						
+						if (!rs.wasNull()) {
+							invoice.put("confirm", confirm);
+						}
+						
+						value = rs.getString(4);
+						
+						if (!rs.wasNull()) {
+							invoice.put("complete", value);
+						}
+						
+						id = rs.getLong(10);
+						
+						if (!rs.wasNull()) {
+							invoice.put("invoice", id);
 						}
 						
 						value = rs.getString(11);
@@ -622,113 +750,10 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getInvoice(int type, int status, String expect) {
-		try (Connection c = this.connPool.getConnection()) {
-			String condition1, condition2, statement;
-			
-			switch (type) {
-			case 1:
-				condition1 = "invoice IS NULL";
-				break;
-			case 2:
-				condition1 = "invoice IS NOT NULL";
-				break;
-			default:
-				condition1 = "TRUE";
-			}
-			
-			switch (status) {
-			case 1:
-				condition2 = "issue IS NULL AND complete IS NULL";
-				break;
-			case 2:
-				condition2 = "issue IS NOT NULL AND complete IS NULL";
-				break;
-			case 3:
-				condition2 = "issue IS NOT NULL AND complete IS NOT NULL";
-				break;
-			default:
-				condition2 = "TRUE";
-			}
-			
-			statement = String.format("SELECT"+
-				" I.id, expect, issue, complete, amount, tax, comment, project, P.name, invoice"+
-				" FROM t_invoice AS I"+
-				" LEFT JOIN t_project AS P"+
-				" ON I.project=P.id"+
-				" WHERE %s AND expect IS NOT NULL AND %s? AND %s"+
-				";",
-				condition1,
-				expect == null? "": "expect<",
-				condition2);
-			
-			try (PreparedStatement pstmt = c.prepareStatement(statement)) {
-				pstmt.setInt(1, type);
-				
-				if (expect == null) {
-					pstmt.setBoolean(1, true);
-				} else {
-					pstmt.setString(1, expect);
-				}
-				
-				try (ResultSet rs = pstmt.executeQuery()) {
-					JSONObject
-						invoiceData = new JSONObject(),
-						invoice;
-					String value;
-					long id;
-					
-					while (rs.next()) {
-						invoice = new JSONObject()
-							.put("id", rs.getLong(1))
-							.put("amount", rs.getInt(5))
-							.put("tax", rs.getInt(6))
-							.put("comment", rs.getString(7))
-							.put("project", rs.getLong(8))
-							.put("pName", rs.getString(9));
-						
-						value = rs.getString(2);
-						
-						if (!rs.wasNull()) {
-							invoice.put("expect", value);
-						}
-						
-						value = rs.getString(3);
-						
-						if (!rs.wasNull()) {
-							invoice.put("issue", value);
-						}
-						
-						value = rs.getString(4);
-						
-						if (!rs.wasNull()) {
-							invoice.put("complete", value);
-						}
-						
-						id = rs.getLong(10);
-						
-						if (!rs.wasNull()) {
-							invoice.put("invoice", id);
-						}
-						
-						invoiceData.put(Long.toString(rs.getLong(1)), invoice);
-					}
-					
-					return invoiceData;
-				}
-			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return null;
-	}
-	
-	@Override
 	public JSONObject getInvoice(long project) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" I.id, expect, issue, complete, amount, tax, comment, invoice, C.id, C.name"+
+				" I.id, expect, confirm, complete, amount, tax, comment, invoice, C.id, C.name"+
 				" FROM t_invoice AS I"+
 				" LEFT JOIN t_company AS C ON I.company=C.id"+
 				" WHERE project=?"+
@@ -741,6 +766,7 @@ public class H2Agent implements Commander, Closeable {
 						invoice;
 					String value;
 					long id;
+					boolean confirm;
 					
 					while (rs.next()) {
 						invoice = new JSONObject()
@@ -755,10 +781,10 @@ public class H2Agent implements Commander, Closeable {
 							invoice.put("expect", value);
 						}
 						
-						value = rs.getString(3);
+						confirm = rs.getBoolean(3);
 						
 						if (!rs.wasNull()) {
-							invoice.put("issue", value);
+							invoice.put("confirm", confirm);
 						}
 						
 						value = rs.getString(4);
@@ -1389,7 +1415,7 @@ public class H2Agent implements Commander, Closeable {
 				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_invoice"+
 					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
 					", expect DATE DEFAULT NULL"+
-					", issue DATE DEFAULT NULL"+
+					", confirm BOOLEAN DEFAULT NULL"+
 					", complete DATE DEFAULT NULL"+
 					", amount INTEGER NOT NULL DEFAULT 0"+
 					", tax INTEGER NOT NULL DEFAULT 0"+
@@ -1829,7 +1855,7 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_invoice"+
 				" SET expect=?,"+
-				" issue=?,"+
+				" confirm=?,"+
 				" complete=?,"+
 				" amount=?,"+
 				" tax=?,"+
@@ -1842,8 +1868,8 @@ public class H2Agent implements Commander, Closeable {
 					pstmt.setNull(1, Types.NULL);
 				}
 				
-				if (invoice.has("issue")) {
-					pstmt.setString(2, invoice.getString("issue"));
+				if (invoice.has("confirm")) {
+					pstmt.setBoolean(2, invoice.getBoolean("confirm"));
 				} else {
 					pstmt.setNull(2, Types.NULL);
 				}

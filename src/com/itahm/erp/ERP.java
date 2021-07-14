@@ -205,7 +205,10 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "INVOICE":
-			if (!agent.addInvoice(request.getJSONObject("invoice"))) {
+			if (!isValidInvoice(request.getJSONObject("invoice"))) {
+				response.setStatus(Response.Status.BADREQUEST);
+			}
+			else if (!agent.addInvoice(request.getJSONObject("invoice"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
@@ -332,7 +335,7 @@ public class ERP implements Serviceable {
 			if (request.has("project")) {
 				result = this.agent.getInvoice(request.getLong("project"));
 			} else if (request.has("type") && request.has("status")) {
-				result = this.agent.getInvoice(request.getInt("type"), request.getInt("status"), request.has("expect")? request.getString("expect"): null);
+				result = this.agent.getInvoice(request.getInt("type"), request.getInt("status"), request.getInt("date"));
 			} else {
 				result = this.agent.getInvoice();
 			}
@@ -577,7 +580,10 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "INVOICE":
-			if (!this.agent.setInvoice(request.getLong("id"), request.getJSONObject("invoice"))) {
+			if (!isValidInvoice(request.getJSONObject("invoice"))) {
+				response.setStatus(Response.Status.BADREQUEST);
+			}
+			else if (!this.agent.setInvoice(request.getLong("id"), request.getJSONObject("invoice"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
@@ -656,5 +662,19 @@ public class ERP implements Serviceable {
 		synchronized(this.isClosed) {
 			return !this.isClosed;
 		}
+	}
+	
+	private boolean isValidInvoice(JSONObject invoice) {
+		if (!invoice.has("expect")) {
+			return false;
+		}
+		
+		if (invoice.has("complete")) {
+			if (!invoice.has("confirm") || !invoice.getBoolean("confirm")) {
+				return false;
+			}
+		}
+		
+		return true;
 	}
 }
