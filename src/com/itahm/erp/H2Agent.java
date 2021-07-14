@@ -99,7 +99,7 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public boolean addFile(long tid, String type, String name, byte [] bin) {
+	public boolean addFile(long lID, String sID, String type, String name, byte [] bin) {
 		String uuid = UUID.randomUUID().toString().toUpperCase();
 		
 		try {
@@ -107,13 +107,14 @@ public class H2Agent implements Commander, Closeable {
 			
 			try (Connection c = this.connPool.getConnection()) {
 				try (PreparedStatement pstmt = c.prepareStatement("Insert INTO t_file"+
-					" (tid, type, name, file)"+
-					" VALUES(?, ?, ?, ?);")) {
+					" (tid, sid, type, name, file)"+
+					" VALUES(?, ?, ?, ?, ?);")) {
 					
-					pstmt.setLong(1, tid);
-					pstmt.setString(2, type);
-					pstmt.setString(3, name);
-					pstmt.setString(4, uuid);
+					pstmt.setLong(1, lID);
+					pstmt.setString(2, sID);
+					pstmt.setString(3, type);
+					pstmt.setString(4, name);
+					pstmt.setString(5, uuid);
 					
 					pstmt.executeUpdate();
 					
@@ -285,28 +286,6 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(2, report.getString("doc"));
 				pstmt.setLong(3, report.getLong("boss"));
 				pstmt.setLong(4, owner);
-				
-				pstmt.executeUpdate();
-			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;	
-	}
-	
-	@Override
-	public boolean addSpend(JSONObject spend, long id) {
-		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO spend (user_id, date, type, target, amount)"+
-				" VALUES(?, ?, ?, ?, ?);")) {
-				pstmt.setLong(1, id);
-				pstmt.setLong(2, spend.getLong("date"));
-				pstmt.setString(3, spend.getString("type"));
-				pstmt.setString(4, spend.getString("target"));
-				pstmt.setLong(5, spend.getLong("amount"));
 				
 				pstmt.executeUpdate();
 			}
@@ -506,14 +485,15 @@ public class H2Agent implements Commander, Closeable {
 					fileData = new JSONObject(),
 					file;
 				
-				try (ResultSet rs = stmt.executeQuery("SELECT id, type, tid, name"+
+				try (ResultSet rs = stmt.executeQuery("SELECT id, type, tid, sid, name"+
 					" FROM t_file;")) {
 					while (rs.next()) {
 						file = new JSONObject()
 							.put("id", rs.getLong(1))
 							.put("type", rs.getString(2))
 							.put("tid", rs.getLong(3))
-							.put("name", rs.getString(4));
+							.put("sid", rs.getString(4))
+							.put("name", rs.getString(5));
 						
 						fileData.put(Long.toString(rs.getLong(1)), file);
 					}
@@ -529,12 +509,40 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getFile(long tid, String type) {
+	public JSONObject getFile(long id, String type) {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name" + 
 				" FROM t_file"+
 				" WHERE tid=? AND type=?;")) {
-				pstmt.setLong(1, tid);
+				pstmt.setLong(1, id);
+				pstmt.setString(2, type);
+				
+				try (ResultSet rs = pstmt.executeQuery()) {
+					JSONObject fileData = new JSONObject();
+					
+					while (rs.next()) {
+						fileData.put(Long.toString(rs.getLong(1)), new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("name", rs.getString(2)));
+					}
+					
+					return fileData;
+				}
+			}
+		} catch (SQLException sqle) {
+			sqle.printStackTrace();
+		}
+		
+		return null;
+	}
+	
+	@Override
+	public JSONObject getFile(String id, String type) {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name" + 
+				" FROM t_file"+
+				" WHERE sid=? AND type=?;")) {
+				pstmt.setString(1, id);
 				pstmt.setString(2, type);
 				
 				try (ResultSet rs = pstmt.executeQuery()) {
@@ -1160,94 +1168,6 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getMySpend(long id) {
-		try (Connection c = this.connPool.getConnection()) {
-			try (Statement stmt = c.createStatement()) {
-				try (PreparedStatement pstmt = c.prepareStatement("SELECT s.id, date, type, target, amount, name"+
-					" FROM spend AS s"+
-					" LEFT JOIN t_file AS f"+
-					" ON s.id=f.doc_id AND f.doc_name='spend'"+
-					" LEFT JOIN report AS r"+
-					" ON s.id=r.doc_id AND r.doc_name='spend'"+
-					" WHERE user_id=? AND boss IS NULL;")) {
-					pstmt.setLong(1, id);
-					
-					try (ResultSet rs = pstmt.executeQuery()) {
-						JSONObject
-							spendData = new JSONObject(),
-							spend;
-						String name;
-						
-						while (rs.next()) {
-							spend = new JSONObject()
-								.put("id", rs.getLong(1))
-								.put("date", rs.getLong(2))
-								.put("type", rs.getString(3))
-								.put("target", rs.getString(4))
-								.put("amount", rs.getLong(5));
-							
-							name = rs.getString(6);
-							
-							if (!rs.wasNull()) {
-								spend.put("file", name);
-							}
-							
-							spendData.put(Long.toString(rs.getLong(1)), spend);
-						}
-						
-						return spendData;
-					}
-				}
-			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return null;
-	}
-	
-	@Override
-	public JSONObject getSpend(long id) {
-		try (Connection c = this.connPool.getConnection()) {
-			try (Statement stmt = c.createStatement()) {
-				try (PreparedStatement pstmt = c.prepareStatement("SELECT date, type, target, amount, name"+
-					" FROM spend AS s"+
-					" LEFT JOIN t_file AS f"+
-					" ON s.id=doc_id AND doc_name='spend'"+
-					" WHERE id=?;")) {
-					pstmt.setLong(1, id);
-					
-					try (ResultSet rs = pstmt.executeQuery()) {
-						JSONObject spend;
-						String name;
-						
-						if (rs.next()) {
-							spend = new JSONObject()
-								.put("id", id)
-								.put("date", rs.getLong(1))
-								.put("type", rs.getString(2))
-								.put("target", rs.getString(3))
-								.put("amount", rs.getLong(4));
-							
-							name = rs.getString(5);
-							
-							if (!rs.wasNull()) {
-								spend.put("file", name);
-							}
-							
-							return spend;
-						}
-					}
-				}
-			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return null;
-	}
-	
-	@Override
 	public JSONObject getUser() {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
@@ -1350,13 +1270,18 @@ public class H2Agent implements Commander, Closeable {
 			try (Statement stmt = c.createStatement()) {
 				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_file"+
 					" (id BIGINT PRIMARY KEY AUTO_INCREMENT"+
-					", tid BIGINT NOT NULL"+
+					", tid BIGINT NOT NULL"+ // project 등 id가 숫자인 것
+					", sid VARCHAR NOT NULL"+ // company 등 id가 문자인 것
 					", type VARCHAR NOT NULL"+
 					", name VARCHAR NOT NULL"+
 					", file VARCHAR NOT NULL"+
 					");");
 			}
 			/**END**/
+			
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("ALTER TABLE IF EXISTS t_file ADD COLUMN IF NOT EXISTS sid VARCHAR NOT NULL DEFAULT '';");
+			}
 			
 			/**
 			 * ITEM
@@ -1739,42 +1664,6 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public boolean removeSpend(long id) {
-		try (Connection c = this.connPool.getConnection()) {
-			c.setAutoCommit(false);
-			
-			try {
-				try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
-					" FROM t_file"+
-					" WHERE doc_id=? AND doc_name='spend';")) {
-					pstmt.setLong(1, id);
-					
-					pstmt.executeUpdate();
-				}
-				
-				try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
-					" FROM spend"+
-					" WHERE id=?;")) {
-					pstmt.setLong(1, id);
-					
-					pstmt.executeUpdate();
-				}
-				
-				c.commit();
-				
-				return true;
-			} catch (SQLException sqle) {
-				c.rollback();
-				
-				throw sqle;
-			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;
-	}
-	@Override
 	public boolean removeUser(long id) {
 		try (Connection c = connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT username FROM t_user WHERE id=?;")) {
@@ -2082,29 +1971,6 @@ public class H2Agent implements Commander, Closeable {
 					return true;
 				}
 			}
-		}
-		
-		return false;
-	}
-	
-	@Override
-	public boolean setSpend(long id, JSONObject spend) {
-		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("UPDATE spend"+
-				" SET date=?, type=?, target=?, amount=?"+
-				" WHERE id=?;")) {
-				pstmt.setLong(1, spend.getLong("date"));
-				pstmt.setString(2, spend.getString("type"));
-				pstmt.setString(3, spend.getString("target"));
-				pstmt.setLong(4, spend.getLong("amount"));
-				pstmt.setLong(5, id);
-				
-				pstmt.executeUpdate();
-				
-				return true;
-			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
 		
 		return false;

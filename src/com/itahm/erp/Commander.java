@@ -8,14 +8,13 @@ import com.itahm.json.JSONObject;
 public interface Commander extends Closeable {
 	public boolean addCompany(JSONObject company);
 	public boolean addCar(JSONObject car);
-	public boolean addFile(long id, String target, String name, byte [] binary);
+	public boolean addFile(long lID, String sID, String target, String name, byte [] binary);
 	public boolean addInvoice(JSONObject invoice);
 	public boolean addItem(JSONObject item);
 	public boolean addManager(JSONObject manager);
 	public boolean addOperation(JSONObject operation);
 	public boolean addProject(JSONObject project);
 	public boolean addReport(JSONObject report, long owner);
-	public boolean addSpend(JSONObject spend, long id);
 	public boolean addUser(JSONObject user);
 	public void backup() throws Exception;
 	public byte [] download(long id);
@@ -25,6 +24,7 @@ public interface Commander extends Closeable {
 	public JSONObject getCompany(String id);
 	public JSONObject getFile();
 	public JSONObject getFile(long id, String doc);
+	public JSONObject getFile(String id, String doc);
 	public JSONObject getInvoice();
 	public JSONObject getInvoice(int type, int status, int date);
 	public JSONObject getInvoice(long project);
@@ -38,8 +38,6 @@ public interface Commander extends Closeable {
 	public JSONObject getProject();
 	public JSONObject getProject(long id);
 	public JSONObject getReport(long id);
-	public JSONObject getMySpend(long id);
-	public JSONObject getSpend(long id);
 	public JSONObject getUser();
 	public JSONObject getUser(long id);
 	public boolean removeCar(long id);
@@ -51,7 +49,6 @@ public interface Commander extends Closeable {
 	public boolean removeManager(long id);
 	public boolean removeProject(long id);
 	public boolean removeReport(long id, String doc);
-	public boolean removeSpend(long id);
 	public boolean removeUser(long id);
 	public boolean setCar(long id, JSONObject car);
 	public boolean setCompany(String id, JSONObject company);
@@ -63,7 +60,6 @@ public interface Commander extends Closeable {
 	public boolean setProject(long id, JSONObject project);
 	public boolean setReport(long id, String doc, Long boss);
 	public boolean setReport(long id, String doc, Long boss, String password) throws SQLException;
-	public boolean setSpend(long id, JSONObject spend);
 	public boolean setUser(long id, JSONObject user);
 	public JSONObject signIn(JSONObject user);
 }

@@ -140,16 +140,33 @@ public class ERP implements Serviceable {
 				} else {
 					String
 						type = request.getHeader("File-Target"),
-						project = request.getHeader("File-Id");
+						id = request.getHeader("File-Id");
 					
-					if (type != null && project != null) {
+					if (type != null && id != null) {
 						byte [] bin = request.read();
 						
 						if (bin.length > 0) {
 							try {
-								if (!this.agent.addFile(Long.parseLong(project), type, URLDecoder.decode(request.getRequestURI().split("/")[1], StandardCharsets.UTF_8.name()), bin)) {
-									response.setStatus(Response.Status.SERVERERROR);
+								switch(type.toUpperCase()) {
+								case "PROJECT":
+									if (!this.agent.addFile(Long.parseLong(id), "", type, URLDecoder.decode(request.getRequestURI().split("/")[1], StandardCharsets.UTF_8.name()), bin)) {
+										response.setStatus(Response.Status.SERVERERROR);
+									}
+									
+									break;
+								case "COMPANY":
+									if (!this.agent.addFile(0, id, type, URLDecoder.decode(request.getRequestURI().split("/")[1], StandardCharsets.UTF_8.name()), bin)) {
+										response.setStatus(Response.Status.SERVERERROR);
+									}
+									
+									break;
+								default:
+									response.setStatus(Response.Status.BADREQUEST);
+									
+									response.write(new JSONObject().
+											put("error","Target not found").toString());
 								}
+								
 							} catch (NumberFormatException nfe) {
 								response.setStatus(Response.Status.BADREQUEST);
 								
@@ -242,12 +259,6 @@ public class ERP implements Serviceable {
 			}
 			
 			break;
-		case "SPEND":
-			if (!agent.addSpend(request.getJSONObject("spend"), account.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
 		case "USER":
 			if (!agent.addUser(request.getJSONObject("user"))) {
 				response.setStatus(Response.Status.SERVERERROR);
@@ -313,12 +324,23 @@ public class ERP implements Serviceable {
 					response.setStatus(Response.Status.NOCONTENT);
 				}
 			} else if (request.has("tid") && request.has("type")) {
-				JSONObject fileData = this.agent.getFile(request.getLong("tid"), request.getString("type"));
+				JSONObject fileData = null;
 				
-				if (fileData != null) {
-					response.write(fileData.toString());
-				} else {
+				switch(request.getString("type").toUpperCase()) {
+				case "PROJECT":
+					fileData = this.agent.getFile(request.getLong("tid"), request.getString("type"));
+					
+					break;
+				case "COMPANY":
+					fileData = this.agent.getFile(request.getString("tid"), request.getString("type"));
+					
+					break;
+				}
+				
+				if (fileData == null) {
 					response.setStatus(Response.Status.SERVERERROR);
+				} else {
+					response.write(fileData.toString());
 				}
 			} else {
 				JSONObject fileData = this.agent.getFile();
@@ -445,22 +467,6 @@ public class ERP implements Serviceable {
 			}
 			
 			break;
-		case "SPEND":
-			JSONObject spendData;
-			
-			if (request.has("id")) {
-				spendData = this.agent.getSpend(request.getLong("id"));
-			} else {
-				spendData = this.agent.getMySpend(account.getLong("id"));
-			}
-			
-			if (spendData != null) {
-				response.write(spendData.toString());
-			} else {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
 		case "USER":
 			if (request.has("id")) {
 				if (account.getInt("level") > 0 && account.getLong("id") != request.getLong("id")) {
@@ -542,12 +548,6 @@ public class ERP implements Serviceable {
 			break;
 		case "REPORT":
 			if (!agent.removeReport(request.getLong("id"), request.getString("doc"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "SPEND":
-			if (!agent.removeSpend(request.getLong("id"))) {
 				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
@@ -635,12 +635,6 @@ public class ERP implements Serviceable {
 				if (!this.agent.setReport(request.getLong("id"), request.getString("doc"), account.getLong("id"), request.getString("password"))) {
 					response.setStatus(Response.Status.FORBIDDEN);
 				}
-			}
-			
-			break;
-		case "SPEND":
-			if (!this.agent.setSpend(request.getLong("id"), request.getJSONObject("spend"))) {
-				response.setStatus(Response.Status.SERVERERROR);
 			}
 			
 			break;
