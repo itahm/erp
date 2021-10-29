@@ -35,7 +35,9 @@ public class ITAhM extends HTTPServer {
 		
 		System.out.format("ITAhM HTTP Server started with TCP %d.\n", tcp);
 		
-		root = path.resolve("data");
+		this.root = path.resolve("data");
+		
+		Path root = path.resolve("data");
 		
 		if (!Files.isDirectory(root)) {
 			Files.createDirectories(root);
