@@ -250,7 +250,7 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "PROJECT":
-			result = agent.addProject(request.getJSONObject("project"));
+			result = agent.addProject(request.getJSONObject("project").put("user", account.getLong("id")));
 			
 			response.write(result.toString());
 			
@@ -272,7 +272,7 @@ public class ERP implements Serviceable {
 		}
 	}
 	
-	private void get(JSONObject request, Response response, JSONObject account) {
+	private void get(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
 		JSONObject result;
 		
 		switch(request.getString("target").toUpperCase()) {
@@ -451,11 +451,7 @@ public class ERP implements Serviceable {
 			} else {
 				result = this.agent.getProject();
 				
-				if (result == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(result.toString());
-				}
+				response.write(result.toString());
 			}
 			
 			break;

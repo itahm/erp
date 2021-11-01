@@ -1092,13 +1092,13 @@ public class H2Agent implements Commander, Closeable {
 						value = rs.getString(10);
 						
 						if (!rs.wasNull()) {
-							project.put("username", value);
+							project.put("userid", value);
 						}
 						
 						value = rs.getString(11);
 						
 						if (!rs.wasNull()) {
-							project.put("name", value);
+							project.put("username", value);
 						}
 						
 						prjData.put(Long.toString(rs.getLong(1)), project);
@@ -1115,7 +1115,7 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getProject(long id) {
+	public JSONObject getProject(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
 				" name, deposit, start, end, content, company, origin, manager"+
@@ -1126,7 +1126,7 @@ public class H2Agent implements Commander, Closeable {
 				
 				try (ResultSet rs = pstmt.executeQuery()) {
 					if (rs.next()) {
-						return new JSONObject()
+						JSONObject project = new JSONObject()
 							.put("id", id)
 							.put("name", rs.getString(1))
 							.put("deposit", rs.getLong(2))
@@ -1136,14 +1136,27 @@ public class H2Agent implements Commander, Closeable {
 							.put("company", rs.getString(6))
 							.put("origin", rs.getString(7))
 							.put("manager", rs.getString(8));
+						String value;
+						
+						value = rs.getString(10);
+						
+						if (!rs.wasNull()) {
+							project.put("userid", value);
+						}
+						
+						value = rs.getString(11);
+						
+						if (!rs.wasNull()) {
+							project.put("username", value);
+						}
+						
+						return project;
+					} else {
+						return null;
 					}
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return null;	
+		}	
 	}
 	
 	@Override

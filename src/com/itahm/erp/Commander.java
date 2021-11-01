@@ -35,8 +35,8 @@ public interface Commander extends Closeable {
 	public JSONObject getManager(String company);
 	public JSONObject getOperation();
 	public JSONObject getOperation(long id);
-	public JSONObject getProject();
-	public JSONObject getProject(long id);
+	public JSONObject getProject() throws SQLException;
+	public JSONObject getProject(long id) throws SQLException;
 	public JSONObject getReport(long id);
 	public JSONObject getUser();
 	public JSONObject getUser(long id);
