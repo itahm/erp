@@ -9,13 +9,13 @@ public interface Commander extends Closeable {
 	public boolean addCompany(JSONObject company);
 	public boolean addCar(JSONObject car);
 	public boolean addFile(long lID, String sID, String target, String name, byte [] binary);
-	public boolean addInvoice(JSONObject invoice);
+	public JSONObject addInvoice(JSONObject invoice) throws SQLException;
 	public boolean addItem(JSONObject item);
 	public boolean addManager(JSONObject manager);
 	public boolean addOperation(JSONObject operation);
-	public boolean addProject(JSONObject project);
+	public JSONObject addProject(JSONObject project) throws SQLException;
 	public boolean addReport(JSONObject report, long owner);
-	public boolean addUser(JSONObject user);
+	public JSONObject addUser(JSONObject user) throws SQLException;
 	public void backup() throws Exception;
 	public byte [] download(long id);
 	public JSONObject getCar();

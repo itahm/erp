@@ -13,7 +13,10 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.h2.jdbcx.JdbcConnectionPool;
 
@@ -21,6 +24,7 @@ import com.itahm.json.JSONObject;
 
 public class H2Agent implements Commander, Closeable {
 	private final static String MD5_ROOT = "63a9f0ea7bb98050796b649e85481845";
+	private final Map<String, AtomicLong> key = new HashMap<>();
 	
 	private Boolean isClosed = false;
 	private final JdbcConnectionPool connPool;
@@ -131,55 +135,55 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public boolean addInvoice(JSONObject invoice) {
+	public JSONObject addInvoice(JSONObject invoice) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_invoice"+
-				" (expect, confirm, complete, amount, tax, comment, project, invoice, company)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
-				if (invoice.has("expect")) {
-					pstmt.setString(1, invoice.getString("expect"));
-				} else {
-					pstmt.setNull(1, Types.NULL);
-				}
+				" (id, expect, confirm, complete, amount, tax, comment, project, invoice, company)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				long id = this.key.get("invoice").incrementAndGet();
 				
-				if (invoice.has("confirm")) {
-					pstmt.setBoolean(2, invoice.getBoolean("confirm"));
+				if (invoice.has("expect")) {
+					pstmt.setString(2, invoice.getString("expect"));
 				} else {
 					pstmt.setNull(2, Types.NULL);
 				}
 				
-				if (invoice.has("complete")) {
-					pstmt.setString(3, invoice.getString("complete"));
+				if (invoice.has("confirm")) {
+					pstmt.setBoolean(3, invoice.getBoolean("confirm"));
 				} else {
 					pstmt.setNull(3, Types.NULL);
 				}
 				
-				if (invoice.has("invoice")) {
-					pstmt.setLong(8, invoice.getLong("invoice"));
+				if (invoice.has("complete")) {
+					pstmt.setString(4, invoice.getString("complete"));
 				} else {
-					pstmt.setNull(8, Types.NULL);
+					pstmt.setNull(4, Types.NULL);
 				}
 				
-				if (invoice.has("company")) {
-					pstmt.setString(9, invoice.getString("company"));
+				if (invoice.has("invoice")) {
+					pstmt.setLong(9, invoice.getLong("invoice"));
 				} else {
 					pstmt.setNull(9, Types.NULL);
 				}
 				
-				pstmt.setInt(4, invoice.getInt("amount"));
-				pstmt.setInt(5, invoice.getInt("tax"));
-				pstmt.setString(6, invoice.getString("comment"));
-				pstmt.setLong(7, invoice.getLong("project"));
+				if (invoice.has("company")) {
+					pstmt.setString(10, invoice.getString("company"));
+				} else {
+					pstmt.setNull(10, Types.NULL);
+				}
+				
+				pstmt.setInt(5, invoice.getInt("amount"));
+				pstmt.setInt(6, invoice.getInt("tax"));
+				pstmt.setString(7, invoice.getString("comment"));
+				pstmt.setLong(8, invoice.getLong("project"));
 				
 				pstmt.executeUpdate();
+				
+				invoice.put("id", id);
+				
+				return invoice;
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;	
+		}	
 	}
 	
 	@Override
@@ -252,29 +256,26 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public boolean addProject(JSONObject project) {
+	public JSONObject addProject(JSONObject project) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_project"+
-				" (name, deposit, start, end, content, company, origin, manager)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?);")) {
-				pstmt.setString(1, project.getString("name"));
-				pstmt.setLong(2, project.getLong("deposit"));
-				pstmt.setString(3, project.getString("start"));
-				pstmt.setString(4, project.getString("end"));
-				pstmt.setString(5, project.getString("content"));
-				pstmt.setString(6, project.getString("company"));
-				pstmt.setString(7, project.getString("origin"));
-				pstmt.setLong(8, project.getLong("manager"));
+				" (user, name, deposit, start, end, content, company, origin, manager)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				pstmt.setLong(1, project.getLong("user"));
+				pstmt.setString(2, project.getString("name"));
+				pstmt.setLong(3, project.getLong("deposit"));
+				pstmt.setString(4, project.getString("start"));
+				pstmt.setString(5, project.getString("end"));
+				pstmt.setString(6, project.getString("content"));
+				pstmt.setString(7, project.getString("company"));
+				pstmt.setString(8, project.getString("origin"));
+				pstmt.setLong(9, project.getLong("manager"));
 				
 				pstmt.executeUpdate();
+				
+				return project;
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;	
+		}	
 	}
 	
 	@Override
@@ -295,32 +296,31 @@ public class H2Agent implements Commander, Closeable {
 			sqle.printStackTrace();
 		}
 		
-		return false;	
+		return false;
 	}
 	
 	@Override
-	public boolean addUser(JSONObject user) {
+	public JSONObject addUser(JSONObject user) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_user (username, password, name, role, part, mobile, phone, level)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?);")) {
-				pstmt.setString(1, user.getString("username"));
-				pstmt.setString(2, user.getString("password"));
-				pstmt.setString(3, user.getString("name"));
-				pstmt.setString(4, user.getString("role"));
-				pstmt.setString(5, user.getString("part"));
-				pstmt.setString(6, user.getString("mobile"));
-				pstmt.setString(7, user.getString("phone"));
-				pstmt.setInt(8, user.getInt("level"));
+			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_user (id, username, password, name, role, part, mobile, phone, level)"+
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				long id = this.key.get("user").incrementAndGet();
+				
+				pstmt.setLong(1, id);
+				pstmt.setString(2, user.getString("username"));
+				pstmt.setString(3, user.getString("password"));
+				pstmt.setString(4, user.getString("name"));
+				pstmt.setString(5, user.getString("role"));
+				pstmt.setString(6, user.getString("part"));
+				pstmt.setString(7, user.getString("mobile"));
+				pstmt.setString(8, user.getString("phone"));
+				pstmt.setInt(9, user.getInt("level"));
 				
 				pstmt.executeUpdate();
+				
+				return user.put("id", id);
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
@@ -1063,8 +1063,10 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
-					" P.id, P.name, deposit, start, end, content, C.name, C2.name, manager"+
+					" P.id, P.name, deposit, start, end, content, C.name, C2.name, manager, U.username, U.name"+
 					" FROM t_project AS P"+
+					" LEFT JOIN t_user AS U"+
+					" ON P.user=U.id"+
 					" LEFT JOIN t_company AS C"+
 					" ON P.company=C.id"+
 					" LEFT JOIN t_company AS C2"+
@@ -1073,6 +1075,7 @@ public class H2Agent implements Commander, Closeable {
 					JSONObject
 						prjData = new JSONObject(),
 						project;
+					String value;
 					
 					while (rs.next()) {
 						project = new JSONObject()
@@ -1085,6 +1088,19 @@ public class H2Agent implements Commander, Closeable {
 							.put("company", rs.getString(7))
 							.put("origin", rs.getString(8))
 							.put("manager", rs.getLong(9));
+						
+						value = rs.getString(10);
+						
+						if (!rs.wasNull()) {
+							project.put("username", value);
+						}
+						
+						value = rs.getString(11);
+						
+						if (!rs.wasNull()) {
+							project.put("name", value);
+						}
+						
 						prjData.put(Long.toString(rs.getLong(1)), project);
 					}
 					
@@ -1331,6 +1347,10 @@ public class H2Agent implements Commander, Closeable {
 					", CONSTRAINT FK_MANAGER_PROJECT FOREIGN KEY (manager) REFERENCES t_manager(id)"+
 					");");
 			}
+			
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("ALTER TABLE IF EXISTS t_project ADD COLUMN IF NOT EXISTS user BIGINT DEFAULT NULL;");
+			}
 			/**END**/
 			
 			/**
@@ -1388,7 +1408,11 @@ public class H2Agent implements Commander, Closeable {
 					", level INTEGER NOT NULL  DEFAULT 1"+
 					", UNIQUE(username)"+
 					");");
-			}			
+			}
+			
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("ALTER TABLE IF EXISTS t_project ADD CONSTRAINT IF NOT EXISTS FK_PROJECT_USER FOREIGN KEY (user) REFERENCES t_user(id);");
+			}
 			/**END**/
 			
 			/**
@@ -1470,6 +1494,22 @@ public class H2Agent implements Commander, Closeable {
 				c.rollback();
 				
 				throw sqle;
+			}
+			
+			try (Statement stmt = c.createStatement()) {
+				try (ResultSet rs = stmt.executeQuery("SELECT"+
+					" COALESCE(MAX(id), 0)"+
+					" FROM t_invoice;")) {
+					this.key.put("invoice", new AtomicLong(rs.next()? rs.getLong(1): 0));
+				}
+			}
+			
+			try (Statement stmt = c.createStatement()) {
+				try (ResultSet rs = stmt.executeQuery("SELECT"+
+					" COALESCE(MAX(id), 0)"+
+					" FROM t_user;")) {
+					this.key.put("user", new AtomicLong(rs.next()? rs.getLong(1): 0));
+				}
 			}
 		}
 		

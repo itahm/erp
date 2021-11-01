@@ -207,7 +207,9 @@ public class ERP implements Serviceable {
 		return true;
 	}
 	
-	private void add(JSONObject request, Response response, JSONObject account) {
+	private void add(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
+		JSONObject result;
+		
 		switch(request.getString("target").toUpperCase()) {
 		case "CAR":
 			if (!agent.addCar(request.getJSONObject("car"))) {
@@ -225,8 +227,8 @@ public class ERP implements Serviceable {
 			if (!isValidInvoice(request.getJSONObject("invoice"))) {
 				response.setStatus(Response.Status.BADREQUEST);
 			}
-			else if (!agent.addInvoice(request.getJSONObject("invoice"))) {
-				response.setStatus(Response.Status.SERVERERROR);
+			else {
+				agent.addInvoice(request.getJSONObject("invoice"));
 			}
 			
 			break;
@@ -248,9 +250,9 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "PROJECT":
-			if (!agent.addProject(request.getJSONObject("project"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
+			result = agent.addProject(request.getJSONObject("project"));
+			
+			response.write(result.toString());
 			
 			break;
 		case "REPORT":
@@ -260,9 +262,9 @@ public class ERP implements Serviceable {
 			
 			break;
 		case "USER":
-			if (!agent.addUser(request.getJSONObject("user"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
+			result = agent.addUser(request.getJSONObject("user"));
+			
+			response.write(result.toString());
 			
 			break;
 		default:
