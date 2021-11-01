@@ -1118,8 +1118,10 @@ public class H2Agent implements Commander, Closeable {
 	public JSONObject getProject(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
-				" name, deposit, start, end, content, company, origin, manager"+
-				" FROM t_project"+
+				" P.name, deposit, start, end, content, company, origin, manager, U.username, U.name"+
+				" FROM t_project AS P"+
+				" LEFT JOIN t_user AS U"+
+				" ON P.user=U.id"+
 				" WHERE id=?"+
 				";")) {
 				pstmt.setLong(1, id);
@@ -1138,13 +1140,13 @@ public class H2Agent implements Commander, Closeable {
 							.put("manager", rs.getString(8));
 						String value;
 						
-						value = rs.getString(10);
+						value = rs.getString(9);
 						
 						if (!rs.wasNull()) {
 							project.put("userid", value);
 						}
 						
-						value = rs.getString(11);
+						value = rs.getString(10);
 						
 						if (!rs.wasNull()) {
 							project.put("username", value);
