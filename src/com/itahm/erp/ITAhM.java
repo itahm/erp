@@ -35,7 +35,7 @@ public class ITAhM extends HTTPServer {
 		
 		System.out.format("ITAhM HTTP Server started with TCP %d.\n", tcp);
 		
-		this.root = path.resolve("data");
+		this.root = path;
 		
 		Path root = path.resolve("data");
 		
