@@ -1122,7 +1122,7 @@ public class H2Agent implements Commander, Closeable {
 				" FROM t_project AS P"+
 				" LEFT JOIN t_user AS U"+
 				" ON P.user=U.id"+
-				" WHERE id=?"+
+				" WHERE P.id=?"+
 				";")) {
 				pstmt.setLong(1, id);
 				
