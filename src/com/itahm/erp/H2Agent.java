@@ -84,7 +84,8 @@ public class H2Agent implements Commander, Closeable {
 	@Override
 	public boolean addCompany(JSONObject company) {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_company (name, id, ceo, address)"+
+			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_company"+
+				" (name, id, ceo, address)"+
 				" VALUES(?, ?, ?, ?);")) {
 				pstmt.setString(1, company.getString("name"));
 				pstmt.setString(2, company.getString("id"));
@@ -141,6 +142,8 @@ public class H2Agent implements Commander, Closeable {
 				" (id, expect, confirm, complete, amount, tax, comment, project, invoice, company)"+
 				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
 				long id = this.key.get("invoice").incrementAndGet();
+				
+				pstmt.setLong(1, id);
 				
 				if (invoice.has("expect")) {
 					pstmt.setString(2, invoice.getString("expect"));
