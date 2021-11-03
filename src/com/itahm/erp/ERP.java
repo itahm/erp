@@ -228,7 +228,9 @@ public class ERP implements Serviceable {
 				response.setStatus(Response.Status.BADREQUEST);
 			}
 			else {
-				agent.addInvoice(request.getJSONObject("invoice"));
+				result = agent.addInvoice(request.getJSONObject("invoice"));
+				
+				response.write(result.toString());
 			}
 			
 			break;
