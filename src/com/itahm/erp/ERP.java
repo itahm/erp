@@ -4,14 +4,13 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.sql.SQLException;
 
 import com.itahm.http.Request;
 import com.itahm.http.Response;
 import com.itahm.http.Session;
 import com.itahm.json.JSONException;
 import com.itahm.json.JSONObject;
-
+import com.itahm.erp.command.Command;
 import com.itahm.service.Serviceable;
 
 public class ERP implements Serviceable {
@@ -21,7 +20,7 @@ public class ERP implements Serviceable {
 	private Commander agent;
 	private final Path root;
 	private Boolean isClosed = true;
-	
+	private Command command;
 	public ERP(Path path) throws Exception {
 		root = path;
 	}
@@ -35,6 +34,8 @@ public class ERP implements Serviceable {
 			
 			try {
 				this.agent = new H2Agent(this.root);
+				
+				this.command = new Command(this.agent);
 				
 				this.isClosed = false;
 			} catch (Exception e) {
@@ -106,10 +107,6 @@ public class ERP implements Serviceable {
 						session.invalidate();
 						
 						break;
-					case "ADD":
-						add(data, response, account);
-						
-						break;
 					case "BACKUP":
 						if (account.getInt("level") > 0) {
 							response.setStatus(Response.Status.FORBIDDEN);
@@ -119,16 +116,11 @@ public class ERP implements Serviceable {
 						
 						break;
 					case "ECHO": break;
-					case "GET":
-						get(data, response, account);				
-						
-						break;			
-					case "REMOVE":
-						remove(data, response, account);
-						
-						break;
 					case "SET":
-						set(data, response, account);
+					case "GET":
+					case "ADD":
+					case "REMOVE":
+						this.command.execute(request, response, data);
 						
 						break;
 					default:
@@ -207,450 +199,6 @@ public class ERP implements Serviceable {
 		return true;
 	}
 	
-	private void add(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
-		JSONObject result;
-		
-		switch(request.getString("target").toUpperCase()) {
-		case "CAR":
-			if (!agent.addCar(request.getJSONObject("car"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "COMPANY":
-			if (!agent.addCompany(request.getJSONObject("company"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "INVOICE":
-			if (!isValidInvoice(request.getJSONObject("invoice"))) {
-				response.setStatus(Response.Status.BADREQUEST);
-			}
-			else {
-				result = agent.addInvoice(request.getJSONObject("invoice"));
-				
-				response.write(result.toString());
-			}
-			
-			break;
-		case "ITEM":
-			if (!agent.addItem(request.getJSONObject("item"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-		case "MANAGER":
-			if (!agent.addManager(request.getJSONObject("manager"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "OPERATION":
-			if (!agent.addOperation(request.getJSONObject("operation")
-				.put("user", account.getLong("id")))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "PROJECT":
-			result = agent.addProject(request.getJSONObject("project").put("user", account.getLong("id")));
-			
-			response.write(result.toString());
-			
-			break;
-		case "REPORT":
-			if (!agent.addReport(request.getJSONObject("report"), account.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "USER":
-			result = agent.addUser(request.getJSONObject("user"));
-			
-			response.write(result.toString());
-			
-			break;
-		default:
-			throw new JSONException("Target is not found.");
-		}
-	}
-	
-	private void get(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
-		JSONObject result;
-		
-		switch(request.getString("target").toUpperCase()) {
-		case "CAR":
-			if (request.has("id")) {
-				result = this.agent.getCar(request.getLong("id"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
-			} else {
-				result = this.agent.getCar();
-				
-				if (result == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(result.toString());
-				}
-			}
-			
-			break;
-		case "COMPANY":
-			if (request.has("id")) {
-				result = this.agent.getCompany(request.getString("id"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
-			} else {
-				result = this.agent.getCompany();
-				
-				if (result == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(result.toString());
-				}
-			}
-			
-			break;
-		case "FILE":
-			if (request.has("id")) {
-				byte [] binary = this.agent.download(request.getLong("id"));
-				
-				if (binary != null) {
-					response.write(binary);
-				} else {
-					response.setStatus(Response.Status.NOCONTENT);
-				}
-			} else if (request.has("tid") && request.has("type")) {
-				JSONObject fileData = null;
-				
-				switch(request.getString("type").toUpperCase()) {
-				case "PROJECT":
-					fileData = this.agent.getFile(request.getLong("tid"), request.getString("type"));
-					
-					break;
-				case "COMPANY":
-					fileData = this.agent.getFile(request.getString("tid"), request.getString("type"));
-					
-					break;
-				}
-				
-				if (fileData == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(fileData.toString());
-				}
-			} else {
-				JSONObject fileData = this.agent.getFile();
-				
-				if (fileData != null) {
-					response.write(fileData.toString());
-				} else {
-					response.setStatus(Response.Status.SERVERERROR);
-				}
-			}
-			
-			break;
-		case "INVOICE":
-			if (request.has("project")) {
-				result = this.agent.getInvoice(request.getLong("project"));
-			} else if (request.has("type") && request.has("status")) {
-				result = this.agent.getInvoice(request.getInt("type"), request.getInt("status"), request.getInt("date"));
-			} else {
-				result = this.agent.getInvoice();
-			}
-			
-			if (result == null) {
-				response.setStatus(Response.Status.SERVERERROR);
-			} else {
-				response.write(result.toString());
-			}
-			
-			break;
-		case "ITEM":
-			if (request.has("id")) {
-				JSONObject item = this.agent.getItem(request.getLong("id"));
-				
-				if (item == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(item.toString());
-				}
-			} else {
-				JSONObject itemData = this.agent.getItem();
-				
-				if (itemData == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(itemData.toString());
-				}
-			}
-			
-			break;
-		case "MANAGER":			
-			if (request.has("id")) {
-				result = this.agent.getManager(request.getLong("id"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
-			} else if (request.has("company")) {
-				result = this.agent.getManager(request.getString("company"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
-			} else {
-				result = this.agent.getManager();
-				
-				if (result == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(result.toString());
-				}
-			}
-			
-			break;
-		case "OPERATION":
-			if (request.has("id")) {
-				result = this.agent.getOperation(request.getLong("id"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
-			} else {
-				result = this.agent.getOperation();
-				
-				if (result == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(result.toString());
-				}
-			}
-			
-			break;
-		case "PROJECT":
-			if (request.has("id")) {
-				result = this.agent.getProject(request.getLong("id"));
-				
-				if (result == null) {
-					response.setStatus(Response.Status.NOCONTENT);
-				} else {
-					response.write(result.toString());
-				}
-			} else {
-				result = this.agent.getProject();
-				
-				response.write(result.toString());
-			}
-			
-			break;
-		case "REPORT":
-			JSONObject reportData = this.agent.getReport(account.getLong("id"));
-			
-			if (reportData != null) {
-				response.write(reportData.toString());
-			} else {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "USER":
-			if (request.has("id")) {
-				if (account.getInt("level") > 0 && account.getLong("id") != request.getLong("id")) {
-					response.setStatus(Response.Status.FORBIDDEN);
-				} else {
-					JSONObject user = this.agent.getUser(request.getLong("id"));
-					
-					if (user == null) {
-						response.setStatus(Response.Status.NOCONTENT);
-					} else {
-						response.write(user.toString());
-					}
-				}
-			} else {
-				JSONObject userData = this.agent.getUser();
-				
-				if (userData == null) {
-					response.setStatus(Response.Status.SERVERERROR);
-				} else {
-					response.write(userData.toString());
-				}
-			}
-			
-			break;
-		default:
-			throw new JSONException("Target is not found.");
-		}
-	}
-	
-	private void remove(JSONObject request, Response response, JSONObject account) {
-		switch(request.getString("target").toUpperCase()) {
-		case "CAR":
-			if (!agent.removeCar(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "COMPANY":
-			if (!agent.removeCompany(request.getString("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "FILE":
-			if (!agent.removeFile(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "INVOICE":
-			if (!agent.removeInvoice(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "ITEM":
-			if (!agent.removeItem(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "MANAGER":
-			if (!agent.removeManager(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "OPERATION":
-			if (!agent.removeOperation(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "PROJECT":
-			if (!agent.removeProject(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "REPORT":
-			if (!agent.removeReport(request.getLong("id"), request.getString("doc"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "USER":
-			if (!account.getString("username").equals("root")) {
-				response.setStatus(Response.Status.FORBIDDEN);
-			} else if (!agent.removeUser(request.getLong("id"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		default:
-			throw new JSONException("Target is not found.");
-		}
-	}
-	
-	private void set(JSONObject request, Response response, JSONObject account) throws JSONException, SQLException {
-		switch(request.getString("target").toUpperCase()) {
-		case "CAR":
-			if (!this.agent.setCar(request.getLong("id"), request.getJSONObject("car"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "COMPANY":
-			if (!this.agent.setCompany(request.getString("id"), request.getJSONObject("company"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "INVOICE":
-			if (!isValidInvoice(request.getJSONObject("invoice"))) {
-				response.setStatus(Response.Status.BADREQUEST);
-			}
-			else if (!this.agent.setInvoice(request.getLong("id"), request.getJSONObject("invoice"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "ITEM":
-			if (!this.agent.setItem(request.getLong("id"), request.getJSONObject("item"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "MANAGER":
-			if (!this.agent.setManager(request.getLong("id"), request.getJSONObject("manager"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "OPERATION":
-			if (!this.agent.setOperation(request.getLong("id"), request.getJSONObject("operation"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "PASSWORD":
-			if (request.has("id")) {
-				if (account.getInt("level") > 0) {
-					response.setStatus(Response.Status.FORBIDDEN);	
-				} else if (!this.agent.setPassword(request.getLong("id"), request.getString("password"))){
-					response.setStatus(Response.Status.SERVERERROR);
-				}
-			} else {
-				if (!this.agent.setPassword(account.getLong("id"), request.getString("password"))) {
-					response.setStatus(Response.Status.SERVERERROR);
-				}
-			}
-			
-			break;
-		case "PROJECT":
-			if (!this.agent.setProject(request.getLong("id"), request.getJSONObject("project"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		case "REPORT":
-			if (request.has("boss")) {
-				if (!this.agent.setReport(request.getLong("id"), request.getString("doc"), request.getLong("boss"))) {
-					response.setStatus(Response.Status.SERVERERROR);
-				}
-			} else if (request.has("password")) {
-				if (!this.agent.setReport(request.getLong("id"), request.getString("doc"), account.getLong("id"), request.getString("password"))) {
-					response.setStatus(Response.Status.FORBIDDEN);
-				}
-			}
-			
-			break;
-		case "USER":
-			if (account.getInt("level") > 0) {
-				response.setStatus(Response.Status.FORBIDDEN);
-			} else if (!this.agent.setUser(request.getLong("id"), request.getJSONObject("user"))) {
-				response.setStatus(Response.Status.SERVERERROR);
-			}
-			
-			break;
-		default:	
-			throw new JSONException("Target is not found.");
-		}
-	}
-	
 	@Override
 	public boolean isRunning() {
 		synchronized(this.isClosed) {
@@ -658,17 +206,4 @@ public class ERP implements Serviceable {
 		}
 	}
 	
-	private boolean isValidInvoice(JSONObject invoice) {
-		if (!invoice.has("expect")) {
-			return false;
-		}
-		
-		if (invoice.has("complete")) {
-			if (!invoice.has("confirm") || !invoice.getBoolean("confirm")) {
-				return false;
-			}
-		}
-		
-		return true;
-	}
 }

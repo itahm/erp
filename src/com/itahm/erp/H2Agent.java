@@ -261,9 +261,11 @@ public class H2Agent implements Commander, Closeable {
 	@Override
 	public JSONObject addProject(JSONObject project) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO t_project"+
+			try (PreparedStatement pstmt = c.prepareStatement("INSERT"+
+				" INTO t_project"+
 				" (user, name, deposit, start, end, content, company, origin, manager)"+
-				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);")) {
+				" VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"+
+				";")) {
 				pstmt.setLong(1, project.getLong("user"));
 				pstmt.setString(2, project.getString("name"));
 				pstmt.setLong(3, project.getLong("deposit"));
@@ -282,24 +284,28 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public boolean addReport(JSONObject report, long owner) {
+	public JSONObject addRepair(JSONObject repair) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("INSERT INTO report (doc_id, doc_name, boss, owner)"+
-				" VALUES(?, ?, ?, ?);")) {
-				pstmt.setLong(1, report.getLong("id"));
-				pstmt.setString(2, report.getString("doc"));
-				pstmt.setLong(3, report.getLong("boss"));
-				pstmt.setLong(4, owner);
+			try (PreparedStatement pstmt = c.prepareStatement("INSERT"+
+				" INTO t_repair"+
+				" (id, user, subject, timestamp, car, distance, etc)"+
+				"  VALUES (?, ?, ?, ?, ?, ?, ?)"+
+				";")) {
+				long id = this.key.get("repair").incrementAndGet();
+				
+				pstmt.setLong(1, id);
+				pstmt.setLong(2, repair.getLong("user"));
+				pstmt.setString(3, repair.getString("subject"));
+				pstmt.setLong(4, repair.getLong("timestamp"));
+				pstmt.setLong(5, repair.getLong("car"));
+				pstmt.setLong(6, repair.getLong("distance"));
+				pstmt.setString(7, repair.getString("etc"));
 				
 				pstmt.executeUpdate();
+				
+				return repair.put("id", id);
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;
+		}	
 	}
 	
 	@Override
@@ -349,7 +355,7 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public byte [] download(long id) {
+	public byte [] download(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT file" + 
 				" FROM t_file"+
@@ -362,8 +368,6 @@ public class H2Agent implements Commander, Closeable {
 					}
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		} catch (IOException ioe) {
 			ioe.printStackTrace();
 		}
@@ -372,7 +376,7 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
-	public JSONObject getCar() {
+	public JSONObject getCar() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT id, name, number"+
@@ -393,15 +397,11 @@ public class H2Agent implements Commander, Closeable {
 					return carData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getCar(long id) {
+	public JSONObject getCar(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name, number"+
 				" FROM t_car"+
@@ -416,18 +416,16 @@ public class H2Agent implements Commander, Closeable {
 							.put("name", rs.getString(2))
 							.put("number", rs.getString(3));
 					}
+					
+					return null;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	
 	@Override
-	public JSONObject getCompany() {
+	public JSONObject getCompany() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				JSONObject
@@ -449,15 +447,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				return companyData;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getCompany(String id) {
+	public JSONObject getCompany(String id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT name, address, ceo" + 
 				" FROM t_company"+
@@ -472,16 +466,15 @@ public class H2Agent implements Commander, Closeable {
 							.put("address", rs.getString(2))
 							.put("ceo", rs.getString(3));
 					}
+					
+					return null;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}		
-		return null;
+		}
 	}
 	
 	@Override
-	public JSONObject getFile() {
+	public JSONObject getFile() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				JSONObject
@@ -504,15 +497,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				return fileData;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getFile(long id, String type) {
+	public JSONObject getFile(long id, String type) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name" + 
 				" FROM t_file"+
@@ -532,15 +521,11 @@ public class H2Agent implements Commander, Closeable {
 					return fileData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return null;
+		} 
 	}
 	
 	@Override
-	public JSONObject getFile(String id, String type) {
+	public JSONObject getFile(String id, String type) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name" + 
 				" FROM t_file"+
@@ -560,15 +545,11 @@ public class H2Agent implements Commander, Closeable {
 					return fileData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getInvoice() {
+	public JSONObject getInvoice() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
@@ -635,15 +616,11 @@ public class H2Agent implements Commander, Closeable {
 					return invoiceData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getInvoice(int type, int status, int date) {
+	public JSONObject getInvoice(int type, int status, int date) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			String condition1, condition2, condition3, statement;
 			
@@ -753,15 +730,11 @@ public class H2Agent implements Commander, Closeable {
 					return invoiceData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getInvoice(long project) {
+	public JSONObject getInvoice(long project) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
 				" I.id, expect, confirm, complete, amount, tax, comment, invoice, C.id, C.name"+
@@ -828,23 +801,19 @@ public class H2Agent implements Commander, Closeable {
 					return invoiceData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getItem() {
+	public JSONObject getItem() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
-			try (Statement stmt = c.createStatement()) {
-				JSONObject
-					itemData = new JSONObject(),
-					item;
-				
+			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT id, maker, name, spec"+
 					" FROM item;")) {
+					JSONObject
+						itemData = new JSONObject(),
+						item;
+					
 					while (rs.next()) {
 						item = new JSONObject()
 							.put("id", rs.getLong(1))
@@ -854,19 +823,15 @@ public class H2Agent implements Commander, Closeable {
 						
 						itemData.put(Long.toString(rs.getLong(1)), item);
 					}
+					
+					return itemData;
 				}
-				
-				return itemData;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getItem(long id) {
+	public JSONObject getItem(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT maker, name, spec " + 
 				" FROM item"+
@@ -881,16 +846,15 @@ public class H2Agent implements Commander, Closeable {
 							.put("name", rs.getString(2))
 							.put("spec", rs.getString(3));
 					}
+					
+					return null;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}		
-		return null;
+		}
 	}
 	
 	@Override
-	public JSONObject getManager() {
+	public JSONObject getManager() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {				
 				try (ResultSet rs = stmt.executeQuery("SELECT M.id, M.name, mobile, email, C.name"+
@@ -916,15 +880,11 @@ public class H2Agent implements Commander, Closeable {
 					return mgrData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getManager(long id) {
+	public JSONObject getManager(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name, mobile, email, company"+
 				" FROM t_manager WHERE id=?;")) {
@@ -939,17 +899,15 @@ public class H2Agent implements Commander, Closeable {
 							.put("email", rs.getString(4))
 							.put("company", rs.getString(5));
 					}
+					
+					return null;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getManager(String company) {
+	public JSONObject getManager(String company) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name, mobile, email, company"+
 				" FROM t_manager WHERE company=?;")) {
@@ -974,15 +932,11 @@ public class H2Agent implements Commander, Closeable {
 					return mgrData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getOperation() {
+	public JSONObject getOperation() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
@@ -1017,14 +971,11 @@ public class H2Agent implements Commander, Closeable {
 					return opData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		return null;	
 	}
 	
 	@Override
-	public JSONObject getOperation(long id) {
+	public JSONObject getOperation(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
 				" U.name, car, date, before, after, extra, total, parking, stock, comment"+
@@ -1052,17 +1003,15 @@ public class H2Agent implements Commander, Closeable {
 							.put("stock", rs.getString(9))
 							.put("comment", rs.getString(10));
 					}
+					
+					return null;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;	
 	}
 	
 	@Override
-	public JSONObject getProject() {
+	public JSONObject getProject() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (ResultSet rs = stmt.executeQuery("SELECT"+
@@ -1110,11 +1059,7 @@ public class H2Agent implements Commander, Closeable {
 					return prjData;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;	
 	}
 	
 	@Override
@@ -1156,62 +1101,93 @@ public class H2Agent implements Commander, Closeable {
 						}
 						
 						return project;
-					} else {
-						return null;
 					}
+					
+					return null;
 				}
 			}
 		}	
 	}
 	
 	@Override
-	public JSONObject getReport(long id) {
+	public JSONObject getRepair() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("SELECT r.id, doc_id, doc_name, name"+
-				" FROM report AS r"+
+			try (Statement stmt = c.createStatement()) {
+				
+				try (ResultSet rs = stmt.executeQuery("SELECT"+
+					" r.id, r.timestamp, u.name, c.name, r.subject, r.distance, r.etc"+
+					" FROM t_repair AS r"+
+					" LEFT JOIN t_user AS u"+
+					" ON user=u.id"+
+					" LEFT JOIN t_car AS c"+
+					" ON car=c.id"+
+					";")) {
+					JSONObject
+						repairData = new JSONObject(),
+						repair;
+					
+					while (rs.next()) {
+						repair = new JSONObject()
+							.put("id", rs.getLong(1))
+							.put("timestamp", rs.getLong(2))
+							.put("user", rs.getString(3))
+							.put("car", rs.getString(4))
+							.put("subject", rs.getString(5))
+							.put("distance", rs.getLong(6))
+							.put("etc", rs.getString(7));
+						
+						repairData.put(Long.toString(rs.getLong(1)), repair);
+					}
+					
+					return repairData;
+				}
+			}
+		}	
+	}
+	
+	@Override
+	public JSONObject getRepair(long id) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
+				"  r.timestamp, u.name, c.id, r.subject, r.distance, r.etc"+
+				" FROM t_repair AS r"+
 				" LEFT JOIN t_user AS u"+
-				" ON owner=u.id"+
-				" WHERE boss=? AND confirm=FALSE"+
+				" ON user=u.id"+
+				" LEFT JOIN t_car AS c"+
+				" ON car=c.id"+
+				" WHERE r.id = ?"+
 				";")) {
 				pstmt.setLong(1, id);
 				
 				try (ResultSet rs = pstmt.executeQuery()) {
-					JSONObject
-						reportData = new JSONObject(),
-						report;
-					
-					while (rs.next()) {
-						report = new JSONObject()
-							.put("id", rs.getLong(1))
-							.put("docID", rs.getLong(2))
-							.put("docName", rs.getString(3))
-							.put("userName", rs.getString(4))
-							.put("boss", id);
-						
-						reportData.put(Long.toString(rs.getLong(1)), report);
+					if (rs.next()) {
+						return new JSONObject()
+							.put("id", id)
+							.put("timestamp", rs.getLong(1))
+							.put("user", rs.getString(2))
+							.put("car", rs.getLong(3))
+							.put("subject", rs.getString(4))
+							.put("distance", rs.getLong(5))
+							.put("etc", rs.getString(6));
 					}
 					
-					return reportData;
+					return null;
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return null;	
+		}	
 	}
 	
 	@Override
-	public JSONObject getUser() {
+	public JSONObject getUser() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
-				JSONObject
-					userData = new JSONObject(),
-					user;
-				
 				try (ResultSet rs = stmt.executeQuery("SELECT id, username, name, role, part, mobile, phone, level"+
 					" FROM t_user"+
 					" WHERE username != 'root';")) {
+					JSONObject
+						userData = new JSONObject(),
+						user;
+					
 					while (rs.next()) {
 						user = new JSONObject()
 							.put("id", rs.getLong(1))
@@ -1225,19 +1201,15 @@ public class H2Agent implements Commander, Closeable {
 						
 						userData.put(Long.toString(rs.getLong(1)), user);
 					}
+					
+					return userData;
 				}
-				
-				return userData;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	@Override
-	public JSONObject getUser(long id) {
+	public JSONObject getUser(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (PreparedStatement pstmt = c.prepareStatement("SELECT id, username, name, role, part, mobile, phone, level"+
@@ -1257,14 +1229,12 @@ public class H2Agent implements Commander, Closeable {
 								.put("phone", rs.getString(7))
 								.put("level", rs.getInt(8));
 						}
+						
+						return null;
 					}
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 	private void initTable() throws SQLException {
@@ -1392,7 +1362,7 @@ public class H2Agent implements Commander, Closeable {
 					");");
 			}
 			/**END**/
-				
+			
 			/**
 			 * REPORT
 			 **/
@@ -1430,6 +1400,24 @@ public class H2Agent implements Commander, Closeable {
 			
 			try (Statement stmt = c.createStatement()) {
 				stmt.executeUpdate("ALTER TABLE IF EXISTS t_project ADD CONSTRAINT IF NOT EXISTS FK_PROJECT_USER FOREIGN KEY (user) REFERENCES t_user(id);");
+			}
+			/**END**/
+			
+			/**
+			 * REPAIR
+			 **/
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate("CREATE TABLE IF NOT EXISTS t_repair"+
+					" (id BIGINT PRIMARY KEY"+
+					", user BIGINT NOT NULL"+
+					", subject VARCHAR NOT NULL"+
+					", timestamp BIGINT NOT NULL"+
+					", car BIGINT NOT NULL"+
+					", distance BIGINT NOT NULL"+
+					", etc VARCHAR DEFAULT ''"+
+					", CONSTRAINT FK_PREPAIR_USER FOREIGN KEY (user) REFERENCES t_user(id)"+
+					", CONSTRAINT FK_PREPAIR_CAR FOREIGN KEY (car) REFERENCES t_car(id)"+
+					");");
 			}
 			/**END**/
 			
@@ -1529,13 +1517,21 @@ public class H2Agent implements Commander, Closeable {
 					this.key.put("user", new AtomicLong(rs.next()? rs.getLong(1): 0));
 				}
 			}
+			
+			try (Statement stmt = c.createStatement()) {
+				try (ResultSet rs = stmt.executeQuery("SELECT"+
+					" COALESCE(MAX(id), 0)"+
+					" FROM t_repair;")) {
+					this.key.put("repair", new AtomicLong(rs.next()? rs.getLong(1): 0));
+				}
+			}
 		}
 		
 		System.out.format("Database parsed in %dms.\n", System.currentTimeMillis() - start);
 	}
 	
 	@Override
-	public boolean removeCar(long id) {
+	public void removeCar(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM t_car"+
@@ -1545,16 +1541,11 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.executeUpdate();
 			}
 			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeCompany(String id) {
+	public void removeCompany(String id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM t_company"+
@@ -1563,17 +1554,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeFile(long id) {
+	public void removeFile(long id) throws SQLException, IOException{
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT"+
 				" file"+
@@ -1594,20 +1579,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		} catch (IOException ioe) {
-			ioe.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeInvoice(long id) {
+	public void removeInvoice(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM t_invoice"+
@@ -1615,18 +1592,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeItem(long id) {
+	public void removeItem(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM item"+
@@ -1634,18 +1605,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeManager(long id) {
+	public void removeManager(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM t_manager"+
@@ -1653,18 +1618,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeOperation(long id) {
+	public void removeOperation(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM t_operation"+
@@ -1672,18 +1631,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeProject(long id) {
+	public void removeProject(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
 				" FROM t_project"+
@@ -1691,38 +1644,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(1, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean removeReport(long id, String doc) {
-		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
-				" FROM report"+
-				" WHERE doc_id=? AND doc_name=?;")) {
-				pstmt.setLong(1, id);
-				pstmt.setString(2, doc);
-				
-				pstmt.executeUpdate();
-				
-				return true;
-			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-		}
-		
-		return false;
-	}
-	
-	@Override
-	public boolean removeUser(long id) {
+	public boolean removeUser(long id) throws SQLException {
 		try (Connection c = connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT username FROM t_user WHERE id=?;")) {
 				pstmt.setLong(1, id);
@@ -1743,15 +1670,11 @@ public class H2Agent implements Commander, Closeable {
 			}	
 			
 			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setCar(long id, JSONObject car) {
+	public void setCar(long id, JSONObject car) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_car"+
 				" SET name=?, number=?"+
@@ -1763,17 +1686,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setCompany(String id, JSONObject company) {
+	public void setCompany(String id, JSONObject company) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_company"+
 				" SET name=?,"+
@@ -1788,17 +1705,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setInvoice(long id, JSONObject invoice) {
+	public void setInvoice(long id, JSONObject invoice) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_invoice"+
 				" SET expect=?,"+
@@ -1840,17 +1751,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setItem(long id, JSONObject item) {
+	public void setItem(long id, JSONObject item) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE item"+
 				" SET maker=?,"+
@@ -1865,17 +1770,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setManager(long id, JSONObject manager) {
+	public void setManager(long id, JSONObject manager) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_manager"+
 				" SET name=?,"+
@@ -1892,17 +1791,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setOperation(long id, JSONObject operation) {
+	public void setOperation(long id, JSONObject operation) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_operation"+
 				" SET car=?,"+
@@ -1929,17 +1822,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;	
 	}
 	
 	@Override
-	public boolean setPassword(long id, String password) {
+	public void setPassword(long id, String password) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_user"+
 				" SET password=?"+
@@ -1950,17 +1837,11 @@ public class H2Agent implements Commander, Closeable {
 				
 				pstmt.executeUpdate();
 			}
-			
-			return true;
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;	
 	}
 
 	@Override
-	public boolean setProject(long id, JSONObject project) {
+	public void setProject(long id, JSONObject project) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_project"+
 				" SET name=?,"+
@@ -1983,59 +1864,37 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(8, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
+
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setReport(long id, String doc, Long boss) {
+	public void setRepair(JSONObject repair) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("UPDATE report"+
-				" SET boss=?"+
-				" WHERE doc_id=? AND doc_name=?;")) {
-				pstmt.setLong(1, boss);
-				pstmt.setLong(2, id);
-				pstmt.setString(3, doc);
+			try (PreparedStatement pstmt = c.prepareStatement("UPDATE"+
+				" t_repair"+
+				" SET"+
+				" subject=?,"+
+				" car=?,"+
+				" distance=?,"+
+				" etc=?"+
+				" WHERE id=?"+
+				";")) {
+				pstmt.setString(1, repair.getString("subject"));
+				pstmt.setLong(2, repair.getLong("car"));
+				pstmt.setLong(3, repair.getLong("distance"));
+				pstmt.setString(4, repair.getString("etc"));
+				pstmt.setLong(5, repair.getLong("id"));
 				
 				pstmt.executeUpdate();
-				
-				return true;
+
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 	
 	@Override
-	public boolean setReport(long id, String doc, Long boss, String password) throws SQLException {
-		try (Connection c = this.connPool.getConnection()) {
-			try (PreparedStatement pstmt = c.prepareStatement("UPDATE report"+
-				" SET confirm=TRUE"+
-				" WHERE EXISTS (SELECT * FROM t_user AS u"+
-				" WHERE doc_id=? AND doc_name=? AND u.password=?);")) {
-				pstmt.setLong(1, id);
-				pstmt.setString(2, doc);
-				pstmt.setString(3, password);
-				
-				if (pstmt.executeUpdate() > 0) {
-					return true;
-				}
-			}
-		}
-		
-		return false;
-	}
-	
-	@Override
-	public boolean setUser(long id, JSONObject user) {
+	public void setUser(long id, JSONObject user) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("UPDATE t_user"+
 				" SET name=?, role=?, part=?, mobile=?, phone=?, level=?"+
@@ -2049,18 +1908,12 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setLong(7, id);
 				
 				pstmt.executeUpdate();
-				
-				return true;
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return false;
 	}
 
 	@Override
-	public JSONObject signIn(JSONObject user) {
+	public JSONObject signIn(JSONObject user) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
 				try (PreparedStatement pstmt = c.prepareStatement("SELECT id, name, level"+
@@ -2079,14 +1932,12 @@ public class H2Agent implements Commander, Closeable {
 								.put("level", rs.getInt(3))
 								.put("username", username);
 						}
+						
+						return null;
 					}
 				}
 			}
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
 		}
-		
-		return null;
 	}
 	
 }
