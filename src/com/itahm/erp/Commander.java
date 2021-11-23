@@ -50,6 +50,7 @@ public interface Commander extends Closeable {
 	public void removeManager(long id) throws SQLException;
 	public void removeOperation(long id) throws SQLException;
 	public void removeProject(long id) throws SQLException;
+	public void removeRepair(long id) throws SQLException;
 	public boolean removeUser(long id) throws SQLException;
 	public void setCar(long id, JSONObject car) throws SQLException;
 	public void setCompany(String id, JSONObject company) throws SQLException;

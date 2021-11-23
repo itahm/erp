@@ -1649,6 +1649,19 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
+	public void removeRepair(long id) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
+				" FROM t_repair"+
+				" WHERE id=?;")) {
+				pstmt.setLong(1, id);
+				
+				pstmt.executeUpdate();
+			}
+		}
+	}
+	
+	@Override
 	public boolean removeUser(long id) throws SQLException {
 		try (Connection c = connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("SELECT username FROM t_user WHERE id=?;")) {

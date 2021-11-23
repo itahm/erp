@@ -97,6 +97,16 @@ public class Remove implements Executor {
 			}
 			
 		});
+
+		map.put("REPAIR", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.removeRepair(request.getLong("id"));
+			}
+			
+		});
 		
 		map.put("USER", new Executor() {
 
