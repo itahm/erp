@@ -1863,7 +1863,8 @@ public class H2Agent implements Commander, Closeable {
 				" end=?,"+
 				" content=?,"+
 				" company=?,"+
-				" origin=?"+
+				" origin=?,"+
+				" manager=?"+
 				" WHERE id=?"+
 				";")) {
 				
@@ -1874,7 +1875,8 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(5, project.getString("content"));
 				pstmt.setString(6, project.getString("company"));
 				pstmt.setString(7, project.getString("origin"));
-				pstmt.setLong(8, id);
+				pstmt.setLong(8, project.getLong("manager"));
+				pstmt.setLong(9, id);
 				
 				pstmt.executeUpdate();
 
