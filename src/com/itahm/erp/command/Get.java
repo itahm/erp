@@ -154,7 +154,7 @@ public class Get implements Executor {
 				return toByteArray(
 					!request.has("id")?
 						agent.getUser():
-					(session.getInt("level") == 0 && session.getLong("id") == request.getLong("id"))?
+					(session.getInt("level") == 0 || session.getLong("id") == request.getLong("id"))?
 						agent.getUser(request.getLong("id")):
 					null
 				);
