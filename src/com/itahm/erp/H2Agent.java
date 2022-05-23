@@ -233,8 +233,8 @@ public class H2Agent implements Commander, Closeable {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("INSERT INTO ")
 				.append("t_leave ")
-				.append("(user, purpose, manager, date) ")
-				.append("VALUES(?, ?, ?, ?)")
+				.append("(user, purpose, manager, date, year) ")
+				.append("VALUES(?, ?, ?, ?, ?)")
 				.append(";")
 				.toString())) {
 					
@@ -242,6 +242,7 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(2, leave.getString("purpose"));
 				pstmt.setLong(3, leave.getLong("manager"));
 				pstmt.setLong(4, leave.getLong("date"));
+				pstmt.setLong(5, leave.getInt("year"));
 				
 				pstmt.executeUpdate();
 			}
