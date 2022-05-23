@@ -123,6 +123,16 @@ public class ERP implements Serviceable {
 						this.command.execute(request, response, data);
 						
 						break;
+					case "RESTORE":
+						byte [] backup = agent.restore();
+						
+						if (backup == null) {
+							throw new JSONException("Backup is not found.");
+						} else {
+							response.write(backup);
+						}
+						
+						break;
 					default:
 						response.setStatus(Response.Status.BADREQUEST);
 						

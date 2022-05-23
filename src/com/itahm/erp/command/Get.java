@@ -1,8 +1,9 @@
 package com.itahm.erp.command;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
-
+import java.nio.file.Files;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,6 +17,15 @@ public class Get implements Executor {
 	private final Map<String, Helper> map = new HashMap<>();
 
 	public Get(Commander agent) {
+		map.put("ASSIGN", new Helper() {
+
+			@Override
+			public byte [] help(Response response, JSONObject request, JSONObject session) throws SQLException {
+				return toByteArray(agent.getAssign(request.getInt("year")));
+			}
+			
+		});
+		
 		map.put("CAR", new Helper() {
 
 			@Override
@@ -79,6 +89,25 @@ public class Get implements Executor {
 			
 		});
 
+		map.put("INFORMATION", new Helper() {
+
+			@Override
+			public byte [] help(Response response, JSONObject request, JSONObject session) throws SQLException {
+				JSONObject result = agent.getInformation();
+				
+				result
+					.put("java", System.getProperty("java.version"))
+					.put("path", agent.getRoot().toString());
+				try {
+					result.put("space", Files.getFileStore(agent.getRoot()).getUsableSpace());
+				} catch (IOException ioe) {
+					ioe.printStackTrace();
+				}
+				
+				return toByteArray(result);
+			}
+			
+		});
 		
 		map.put("ITEM", new Helper() {
 
@@ -87,7 +116,20 @@ public class Get implements Executor {
 				return toByteArray(
 					request.has("id")?
 						agent.getItem(request.getLong("id")):
-					agent.getItem()
+						agent.getItem()
+				);
+			}
+			
+		});
+		
+		map.put("LEAVE", new Helper() {
+
+			@Override
+			public byte [] help(Response response, JSONObject request, JSONObject session) throws SQLException {
+				return toByteArray(
+					request.has("id")?
+						agent.getLeave(request.getLong("id")):
+						agent.getLeave()
 				);
 			}
 			

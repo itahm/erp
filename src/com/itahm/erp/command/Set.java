@@ -13,6 +13,16 @@ public class Set implements Executor {
 	private final Map<String, Executor> map = new HashMap<>();
 	
 	public Set(Commander agent) {
+		map.put("ASSIGN", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.setAssign(request.getJSONObject("assign"));
+			}
+			
+		});
+
 		map.put("CAR", new Executor() {
 
 			@Override
@@ -56,6 +66,17 @@ public class Set implements Executor {
 			
 		});
 
+		map.put("LEAVE", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.setLeave(request.getJSONObject("leave"));
+			}
+			
+		});
+
+		
 		map.put("MANAGER", new Executor() {
 
 			@Override

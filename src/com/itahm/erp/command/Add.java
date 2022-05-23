@@ -13,6 +13,16 @@ public class Add implements Executor {
 	private final Map<String, Executor> map = new HashMap<>();
 	
 	public Add(Commander agent) {
+		map.put("ASSIGN", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.addAssign(request.getJSONObject("assign"));
+			}
+			
+		});
+		
 		map.put("CAR", new Executor() {
 
 			@Override
@@ -58,6 +68,16 @@ public class Add implements Executor {
 			
 		});
 
+		map.put("LEAVE", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.addLeave(request.getJSONObject("leave"));
+			}
+			
+		});
+		
 		map.put("MANAGER", new Executor() {
 
 			@Override

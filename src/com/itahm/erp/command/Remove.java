@@ -14,6 +14,16 @@ public class Remove implements Executor {
 	private final Map<String, Executor> map = new HashMap<>();
 	
 	public Remove(Commander agent) {
+		map.put("ASSIGN", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.removeAssign(request.getLong("user"), request.getInt("year"));
+			}
+			
+		});
+		
 		map.put("CAR", new Executor() {
 
 			@Override
@@ -68,6 +78,16 @@ public class Remove implements Executor {
 			
 		});
 
+		map.put("LEAVE", new Executor() {
+
+			@Override
+			public void execute(Response response, JSONObject request, JSONObject session)
+				throws SQLException {
+				agent.removeLeave(request.getLong("id"));
+			}
+			
+		});
+		
 		map.put("MANAGER", new Executor() {
 
 			@Override

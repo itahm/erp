@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -59,6 +60,24 @@ public class H2Agent implements Commander, Closeable {
 		initData();
 				
 		System.out.println("Agent start.");
+	}
+	
+	@Override
+	public void addAssign(JSONObject assign) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("INSERT INTO ")
+				.append("t_leave_assign ")
+				.append("(user, year, count) ")
+				.append("VALUES (?, ?, ?)")
+				.append(";")
+				.toString())) {
+				pstmt.setLong(1, assign.getLong("user"));
+				pstmt.setInt(2, assign.getInt("year"));
+				pstmt.setInt(3, assign.getInt("count"));
+				
+				pstmt.executeUpdate();
+			}
+		}
 	}
 	
 	@Override
@@ -207,6 +226,27 @@ public class H2Agent implements Commander, Closeable {
 		}
 		
 		return false;	
+	}
+	
+	@Override
+	public void addLeave(JSONObject leave) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("INSERT INTO ")
+				.append("t_leave ")
+				.append("(user, purpose, manager, date) ")
+				.append("VALUES(?, ?, ?, ?)")
+				.append(";")
+				.toString())) {
+					
+				pstmt.setLong(1, leave.getLong("user"));
+				pstmt.setString(2, leave.getString("purpose"));
+				pstmt.setLong(3, leave.getLong("manager"));
+				pstmt.setLong(4, leave.getLong("date"));
+				
+				pstmt.executeUpdate();
+			}
+			
+		}
 	}
 	
 	@Override
@@ -373,6 +413,44 @@ public class H2Agent implements Commander, Closeable {
 		}
 		
 		return null;
+	}
+	
+	@Override
+	public JSONObject getAssign(int year) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("SELECT ")
+				.append("U.id, username, name, count, COUNT(confirm), role, part ")
+				.append("FROM t_user AS U ")
+				.append("LEFT JOIN  ")
+				.append("(SELECT user, confirm FROM t_leave WHERE year=?) AS L ")
+				.append("ON U.id = L.user ")
+				.append("LEFT JOIN ")
+				.append("(SELECT user, count FROM t_leave_assign WHERE year=?) AS LS ")
+				.append("ON U.id = LS.user ")
+				.append("GROUP BY L.user, U.id")
+				.append(";")
+				.toString())) {
+				pstmt.setInt(1, year);
+				pstmt.setInt(2, year);
+				
+				try (ResultSet rs = pstmt.executeQuery()) {
+					JSONObject assignData = new JSONObject();
+					
+					while (rs.next()) {
+						assignData.put(Long.toString(rs.getLong(1)), new JSONObject()
+							.put("user", rs.getLong(1))
+							.put("username", rs.getString(2))
+							.put("name", rs.getString(3))
+							.put("count", rs.getInt(4))
+							.put("confirm", rs.getInt(5))
+							.put("role", rs.getString(6))
+							.put("part", rs.getString(7)));
+					}
+					
+					return assignData;
+				}
+			}
+		}
 	}
 	
 	@Override
@@ -830,6 +908,24 @@ public class H2Agent implements Commander, Closeable {
 		}
 	}
 	
+	public JSONObject getInformation() {
+		JSONObject informationData = new JSONObject();
+		
+		try {
+			Path backup = this.root.resolve("backup.zip");
+			
+			if (Files.isRegularFile(backup)) {
+				BasicFileAttributes attr = Files.readAttributes(backup, BasicFileAttributes.class);
+				
+				informationData.put("backup", attr.lastModifiedTime().toMillis());
+			}
+		} catch (IOException ioe) {
+			ioe.printStackTrace();
+		}
+		
+		return informationData;
+	}
+	
 	@Override
 	public JSONObject getItem(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
@@ -848,6 +944,90 @@ public class H2Agent implements Commander, Closeable {
 					}
 					
 					return null;
+				}
+			}
+		}
+	}
+	
+	@Override
+	public JSONObject getLeave() throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (Statement stmt = c.createStatement()) {				
+				try (ResultSet rs = stmt.executeQuery(new StringBuilder("SELECT ")
+					.append("user, purpose, manager, U2.name, U.name, date, confirm, L.id ")
+					.append("FROM t_leave AS L ")
+					.append("LEFT JOIN t_user AS U ")
+					.append("ON L.manager=U.id ")
+					.append("LEFT JOIN t_user AS U2 ")
+					.append("ON L.user=U2.id")
+					.append(";")
+					.toString())) {
+					JSONObject
+						leaveData = new JSONObject(),
+						leave;
+					long confirm;
+					
+					while (rs.next()) {
+						leave = new JSONObject()
+							.put("user", rs.getLong(1))
+							.put("purpose", rs.getString(2))
+							.put("manager", rs.getLong(3))
+							.put("uname", rs.getString(4))
+							.put("mname", rs.getString(5))
+							.put("date", rs.getLong(6))
+							.put("id", rs.getLong(8));
+						
+						confirm = rs.getLong(7);
+						
+						if (!rs.wasNull()) {
+							leave.put("confirm", confirm);
+						}
+						
+						leaveData.put(Long.toString(rs.getLong(8)), leave);
+					}
+					
+					return leaveData;
+				}
+			}
+		}
+	}
+	
+	@Override
+	public JSONObject getLeave(long id) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("SELECT ")
+				.append("user, purpose, manager, U2.name, U.name, date, confirm, L.id ")
+				.append("FROM t_leave AS L ")
+				.append("LEFT JOIN t_user AS U ")
+				.append("ON L.manager=U.id ")
+				.append("LEFT JOIN t_user AS U2 ")
+				.append("ON L.user=U2.id ")
+				.append("WHERE L.id=?")
+				.append(";")
+				.toString())) {
+				pstmt.setLong(1, id);
+				
+				try (ResultSet rs = pstmt.executeQuery()) {
+					if (rs.next()) {
+						JSONObject leave = new JSONObject()
+							.put("user", rs.getLong(1))
+							.put("purpose", rs.getString(2))
+							.put("manager", rs.getLong(3))
+							.put("uname", rs.getString(4))
+							.put("mname", rs.getString(5))
+							.put("date", rs.getLong(6))
+							.put("id", rs.getLong(8));
+						
+						long confirm = rs.getLong(7);
+						
+						if (!rs.wasNull()) {
+							leave.put("confirm", confirm);
+						}
+						
+						return leave;
+					} else {
+						return null;
+					}
 				}
 			}
 		}
@@ -1177,13 +1357,22 @@ public class H2Agent implements Commander, Closeable {
 		}	
 	}
 	
+	public Path getRoot() {
+		return this.root;
+	}
+	
 	@Override
 	public JSONObject getUser() throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (Statement stmt = c.createStatement()) {
-				try (ResultSet rs = stmt.executeQuery("SELECT id, username, name, role, part, mobile, phone, level"+
-					" FROM t_user"+
-					" WHERE username != 'root';")) {
+				try (ResultSet rs = stmt.executeQuery(new StringBuilder("SELECT ")
+					.append("U.id, username, name, role, part, mobile, phone, level, COUNT(confirm) ")
+					.append("FROM t_user AS U ")
+					.append("LEFT JOIN t_leave AS L ")
+					.append("ON U.id = L.user ")
+					.append("WHERE username != 'root' ")
+					.append("GROUP BY L.user, U.id")
+					.append(";").toString())) {
 					JSONObject
 						userData = new JSONObject(),
 						user;
@@ -1197,7 +1386,8 @@ public class H2Agent implements Commander, Closeable {
 							.put("part", rs.getString(5))
 							.put("mobile", rs.getString(6))
 							.put("phone", rs.getString(7))
-							.put("level", rs.getInt(8));
+							.put("level", rs.getInt(8))
+							.put("confirm", rs.getLong(9));
 						
 						userData.put(Long.toString(rs.getLong(1)), user);
 					}
@@ -1459,6 +1649,42 @@ public class H2Agent implements Commander, Closeable {
 			}
 			/**END**/
 			
+			/**
+			 * LEAVE
+			 **/
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate(new StringBuilder("CREATE TABLE IF NOT EXISTS ")
+					.append("t_leave ")
+					.append("(id BIGINT PRIMARY KEY AUTO_INCREMENT, ")
+					.append("user BIGINT NOT NULL, ")
+					.append("purpose VARCHAR NOT NULL, ")
+					.append("manager BIGINT NOT NULL, ")
+					.append("date BIGINT NOT NULL, ")
+					.append("year INT NOT NULL, ")
+					.append("confirm BIGINT DEFAULT NULL, ")
+					.append("CONSTRAINT FK_LEAVE_USER FOREIGN KEY (user) REFERENCES t_user(id), ")
+					.append("CONSTRAINT FK_LEAVE_MANAGER FOREIGN KEY (user) REFERENCES t_user(id)")
+					.append(");")
+					.toString());
+			}
+			/**END**/
+			
+			/**
+			 * LEAVE ASSIGN
+			 **/
+			try (Statement stmt = c.createStatement()) {
+				stmt.executeUpdate(new StringBuilder("CREATE TABLE IF NOT EXISTS ")
+					.append("t_leave_assign ")
+					.append("(user BIGINT NOT NULL, ")
+					.append("year INT NOT NULL, ")
+					.append("count INT NOT NULL, ")
+					.append("CONSTRAINT FK_LEAVE_ASSIGN_USER FOREIGN KEY (user) REFERENCES t_user(id), ")
+					.append("CONSTRAINT UQ_LEAVE_USER_YEAR UNIQUE(user, year)")
+					.append(");")
+					.toString());
+			}
+			/**END**/
+			
 			try {
 				c.commit();
 			} catch (Exception e) {
@@ -1528,6 +1754,22 @@ public class H2Agent implements Commander, Closeable {
 		}
 		
 		System.out.format("Database parsed in %dms.\n", System.currentTimeMillis() - start);
+	}
+	
+	@Override
+	public void removeAssign(long user, int year) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("DELETE FROM ")
+				.append("t_leave_assign ")
+				.append("WHERE user=? AND year=?")
+				.append(";")
+				.toString())) {
+				pstmt.setLong(1, user);
+				pstmt.setInt(2, year);
+				
+				pstmt.executeUpdate();
+			}
+		}
 	}
 	
 	@Override
@@ -1610,6 +1852,21 @@ public class H2Agent implements Commander, Closeable {
 	}
 	
 	@Override
+	public void removeLeave(long id) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("DELETE FROM ")
+				.append("t_leave ")
+				.append("WHERE id=? AND confirm IS NULL")
+				.append(";")
+				.toString())) {
+				pstmt.setLong(1, id);
+				
+				pstmt.executeUpdate();
+			}
+		}
+	}
+	
+	@Override
 	public void removeManager(long id) throws SQLException {
 		try (Connection c = this.connPool.getConnection()) {
 			try (PreparedStatement pstmt = c.prepareStatement("DELETE"+
@@ -1683,6 +1940,36 @@ public class H2Agent implements Commander, Closeable {
 			}	
 			
 			return true;
+		}
+	}
+	
+	@Override
+	public byte [] restore() throws IOException {
+		Path backup = this.root.resolve("backup.zip");
+		
+		if (Files.isRegularFile(backup)) {
+			return Files.readAllBytes(backup);
+		} else {
+			return null;
+		}
+	}
+	
+	@Override
+	public void setAssign(JSONObject assign) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("MERGE INTO ")
+				.append("t_leave_assign ")
+				.append("(user, year, count) ")
+				.append("KEY (user, year) ")
+				.append("VALUES (?, ?, ?)")
+				.append(";")
+				.toString())) {
+				pstmt.setLong(1, assign.getLong("user"));
+				pstmt.setInt(2, assign.getInt("year"));
+				pstmt.setInt(3, assign.getInt("count"));
+				
+				pstmt.executeUpdate();
+			}
 		}
 	}
 	
@@ -1780,6 +2067,23 @@ public class H2Agent implements Commander, Closeable {
 				pstmt.setString(3, item.getString("spec"));
 				
 				pstmt.setLong(4, id);
+				
+				pstmt.executeUpdate();
+			}
+		}
+	}
+	
+	@Override
+	public void setLeave(JSONObject leave) throws SQLException {
+		try (Connection c = this.connPool.getConnection()) {
+			try (PreparedStatement pstmt = c.prepareStatement(new StringBuilder("UPDATE ")
+				.append("t_leave ")
+				.append("SET confirm=? ")
+				.append("WHERE id=?")
+				.append(";")
+				.toString())) {
+				pstmt.setLong(1, leave.getLong("confirm"));
+				pstmt.setLong(2, leave.getLong("id"));
 				
 				pstmt.executeUpdate();
 			}

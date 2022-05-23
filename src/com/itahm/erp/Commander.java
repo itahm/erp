@@ -2,16 +2,19 @@ package com.itahm.erp;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.SQLException;
 
 import com.itahm.json.JSONObject;
 
 public interface Commander extends Closeable {
+	public void addAssign(JSONObject assign) throws SQLException;
 	public boolean addCar(JSONObject car);
 	public boolean addCompany(JSONObject company);
 	public boolean addFile(long lID, String sID, String type, String name, byte [] bin);
 	public JSONObject addInvoice(JSONObject invoice) throws SQLException;
 	public boolean addItem(JSONObject item);
+	public void addLeave(JSONObject leave) throws SQLException;
 	public boolean addManager(JSONObject manager);
 	public boolean addOperation(JSONObject operation);
 	public JSONObject addProject(JSONObject project) throws SQLException;
@@ -19,6 +22,7 @@ public interface Commander extends Closeable {
 	public JSONObject addUser(JSONObject user) throws SQLException;
 	public void backup() throws Exception;
 	public byte [] download(long id) throws SQLException;
+	public JSONObject getAssign(int year) throws SQLException;
 	public JSONObject getCar() throws SQLException;
 	public JSONObject getCar(long id) throws SQLException;
 	public JSONObject getCompany() throws SQLException;
@@ -26,11 +30,14 @@ public interface Commander extends Closeable {
 	public JSONObject getFile() throws SQLException;
 	public JSONObject getFile(long id, String type) throws SQLException;
 	public JSONObject getFile(String id, String type) throws SQLException;
+	public JSONObject getInformation();
 	public JSONObject getInvoice() throws SQLException;
 	public JSONObject getInvoice(int type, int status, int date) throws SQLException;
 	public JSONObject getInvoice(long project) throws SQLException;
 	public JSONObject getItem() throws SQLException;
 	public JSONObject getItem(long id) throws SQLException;
+	public JSONObject getLeave() throws SQLException;
+	public JSONObject getLeave(long id) throws SQLException;
 	public JSONObject getManager() throws SQLException;
 	public JSONObject getManager(long id) throws SQLException;
 	public JSONObject getManager(String company) throws SQLException;
@@ -40,22 +47,28 @@ public interface Commander extends Closeable {
 	public JSONObject getProject(long id) throws SQLException;
 	public JSONObject getRepair() throws SQLException;
 	public JSONObject getRepair(long id) throws SQLException;
+	public Path getRoot();
 	public JSONObject getUser() throws SQLException;
 	public JSONObject getUser(long id) throws SQLException;
+	public void removeAssign(long user, int year) throws SQLException;
 	public void removeCar(long id) throws SQLException;
 	public void removeCompany(String id) throws SQLException;
 	public void removeFile(long id) throws IOException, SQLException;
 	public void removeInvoice(long id) throws SQLException;
 	public void removeItem(long id) throws SQLException;
+	public void removeLeave(long id) throws SQLException;
 	public void removeManager(long id) throws SQLException;
 	public void removeOperation(long id) throws SQLException;
 	public void removeProject(long id) throws SQLException;
 	public void removeRepair(long id) throws SQLException;
 	public boolean removeUser(long id) throws SQLException;
+	public byte [] restore() throws IOException;
+	public void setAssign(JSONObject assign) throws SQLException;
 	public void setCar(long id, JSONObject car) throws SQLException;
 	public void setCompany(String id, JSONObject company) throws SQLException;
 	public void setInvoice(long id, JSONObject invoice) throws SQLException;
 	public void setItem(long id, JSONObject item) throws SQLException;
+	public void setLeave(JSONObject leave) throws SQLException;
 	public void setManager(long id, JSONObject manager) throws SQLException;
 	public void setOperation(long id, JSONObject operation) throws SQLException;
 	public void setPassword(long id, String password) throws SQLException;
